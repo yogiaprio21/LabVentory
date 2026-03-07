@@ -9,8 +9,8 @@ const env = {
   SMTP_USER: process.env.SMTP_USER || '',
   SMTP_PASS: process.env.SMTP_PASS || '',
   MAIL_FROM: process.env.MAIL_FROM || 'noreply@example.com',
-  INITIAL_SUPERADMIN_EMAIL: process.env.INITIAL_SUPERADMIN_EMAIL || 'superadmin@labventory.com',
-  INITIAL_SUPERADMIN_PASSWORD: process.env.INITIAL_SUPERADMIN_PASSWORD || 'superadmin123',
+  INITIAL_SUPERADMIN_EMAIL: process.env.INITIAL_SUPERADMIN_EMAIL,
+  INITIAL_SUPERADMIN_PASSWORD: process.env.INITIAL_SUPERADMIN_PASSWORD,
 }
 
 module.exports = { env }
