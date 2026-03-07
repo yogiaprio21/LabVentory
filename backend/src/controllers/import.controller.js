@@ -23,21 +23,49 @@ const importInventory = async (req, res) => {
         .on('data', (data) => results.push(data))
         .on('end', async () => {
             try {
-                const imports = results.map(row => ({
-                    name: row.name,
-                    categoryId: Number(row.categoryId),
-                    labId: labId || Number(row.labId),
-                    totalStock: Number(row.totalStock),
-                    availableStock: Number(row.availableStock),
-                    minStock: Number(row.minStock) || 0,
-                    location: row.location || '',
-                    condition: row.condition || 'Good'
-                }))
+                const imports = []
 
-                await prisma.inventory.createMany({ data: imports })
+                for (const row of results) {
+                    const currentLabId = labId || Number(row.labId)
+                    if (!currentLabId) continue
+
+                    const categoryName = row.category || 'Uncategorized'
+
+                    // Find or create category by name for this lab
+                    let category = await prisma.category.findFirst({
+                        where: {
+                            name: { equals: categoryName, mode: 'insensitive' },
+                            labId: currentLabId
+                        }
+                    })
+
+                    if (!category) {
+                        category = await prisma.category.create({
+                            data: {
+                                name: categoryName,
+                                labId: currentLabId
+                            }
+                        })
+                    }
+
+                    imports.push({
+                        name: row.name,
+                        categoryId: category.id,
+                        labId: currentLabId,
+                        totalStock: Number(row.totalStock),
+                        availableStock: Number(row.availableStock),
+                        minStock: Number(row.minStock) || 0,
+                        location: row.location || '',
+                        condition: row.condition || 'Good'
+                    })
+                }
+
+                if (imports.length > 0) {
+                    await prisma.inventory.createMany({ data: imports })
+                }
 
                 // Clean up file
-                fs.unlinkSync(req.file.path)
+                if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path)
 
                 res.json({ message: `Successfully imported ${imports.length} items` })
             } catch (err) {

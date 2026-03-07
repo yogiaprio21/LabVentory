@@ -49,7 +49,7 @@ const inventory = {
         body: z.object({
             name: z.string().min(2),
             categoryId: z.number(),
-            labId: z.number(),
+            labId: z.number().optional(),
             totalStock: z.number().min(0),
             availableStock: z.number().min(0),
             minStock: z.number().min(0).optional(),
