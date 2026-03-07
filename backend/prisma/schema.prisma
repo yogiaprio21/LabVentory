@@ -1,0 +1,118 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  superadmin
+  admin
+  student
+}
+
+enum BorrowStatus {
+  pending
+  approved
+  rejected
+  returned
+  late
+  damaged
+  lost
+}
+
+model User {
+  id        Int           @id @default(autoincrement())
+  name      String
+  email     String        @unique
+  password  String
+  role      Role
+  labId     Int?
+  lab       Lab?          @relation(fields: [labId], references: [id])
+  borrowings Borrowing[]
+  auditLogs AuditLog[]
+  notifications Notification[]
+  createdAt DateTime      @default(now())
+}
+
+model Notification {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  title     String
+  message   String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  @@index([userId])
+  @@index([isRead])
+}
+
+model Lab {
+  id         Int         @id @default(autoincrement())
+  name       String
+  location   String
+  users      User[]
+  categories Category[]
+  inventory  Inventory[]
+  createdAt  DateTime    @default(now())
+}
+
+model Category {
+  id        Int        @id @default(autoincrement())
+  name      String
+  labId     Int
+  lab       Lab        @relation(fields: [labId], references: [id])
+  inventory Inventory[]
+}
+
+model Inventory {
+  id             Int         @id @default(autoincrement())
+  name           String
+  categoryId     Int
+  category       Category    @relation(fields: [categoryId], references: [id])
+  labId          Int
+  lab            Lab         @relation(fields: [labId], references: [id])
+  totalStock     Int
+  availableStock Int
+  minStock       Int         @default(0)
+  location       String?
+  condition      String?
+  qrCodeUrl      String?
+  borrowings     Borrowing[]
+  createdAt      DateTime    @default(now())
+  @@index([labId])
+  @@index([categoryId])
+  @@index([name])
+}
+
+model Borrowing {
+  id          Int          @id @default(autoincrement())
+  userId      Int
+  user        User         @relation(fields: [userId], references: [id])
+  inventoryId Int
+  inventory   Inventory    @relation(fields: [inventoryId], references: [id])
+  quantity    Int
+  borrowDate  DateTime     @default(now())
+  dueDate     DateTime
+  returnDate  DateTime?
+  status      BorrowStatus @default(pending)
+  createdAt   DateTime     @default(now())
+  @@index([status])
+  @@index([dueDate])
+  @@index([userId])
+  @@index([inventoryId])
+  @@index([borrowDate])
+}
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  action    String
+  entity    String
+  entityId  Int
+  details   Json?
+  timestamp DateTime @default(now())
+}

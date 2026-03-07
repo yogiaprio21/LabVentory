@@ -1,0 +1,35 @@
+{
+  "openapi": "3.0.3",
+  "info": { "title": "LabVentory API", "version": "1.0.0" },
+  "servers": [{ "url": "/api" }],
+  "components": {
+    "securitySchemes": { "bearerAuth": { "type": "http", "scheme": "bearer", "bearerFormat": "JWT" } },
+    "schemas": {
+      "LoginRequest": { "type": "object", "properties": { "email": { "type": "string", "format": "email" }, "password": { "type": "string" } }, "required": ["email","password"] },
+      "RegisterRequest": { "type": "object", "properties": { "name": { "type": "string" }, "email": { "type": "string","format":"email" }, "password": { "type": "string" }, "role": { "type": "string","enum":["superadmin","admin","student"] }, "labId": { "type": "integer","nullable": true } }, "required": ["name","email","password","role"] },
+      "Lab": { "type": "object", "properties": { "id": { "type": "integer" }, "name": { "type": "string" }, "location": { "type": "string" } } },
+      "Category": { "type": "object", "properties": { "id": { "type": "integer" }, "name": { "type": "string" }, "labId": { "type": "integer" } } },
+      "Inventory": { "type": "object", "properties": { "id": { "type": "integer" }, "name": { "type": "string" }, "categoryId": { "type": "integer" }, "labId": { "type": "integer" }, "totalStock": { "type": "integer" }, "availableStock": { "type": "integer" }, "location": { "type": "string" }, "condition": { "type": "string" }, "qrCodeUrl": { "type": "string" } } },
+      "Borrowing": { "type": "object", "properties": { "id": { "type": "integer" }, "userId": { "type": "integer" }, "inventoryId": { "type": "integer" }, "quantity": { "type": "integer" }, "borrowDate": { "type": "string","format":"date-time" }, "dueDate": { "type": "string","format":"date-time" }, "returnDate": { "type": "string","format":"date-time","nullable": true }, "status": { "type": "string","enum":["pending","approved","rejected","returned","late"] } } }
+    }
+  },
+  "security": [{ "bearerAuth": [] }],
+  "tags": [{ "name": "Auth" }, { "name": "Labs" }, { "name": "Categories" }, { "name": "Inventory" }, { "name": "Borrowings" }, { "name": "Dashboard" }, { "name": "Export" }],
+  "paths": {
+    "/auth/register": { "post": { "tags": ["Auth"], "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RegisterRequest" } } } }, "responses": { "201": { "description": "Created" } } } },
+    "/auth/login": { "post": { "tags": ["Auth"], "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LoginRequest" }, "examples": { "default": { "value": { "email": "superadmin@example.com", "password": "superadmin123" } } } } } }, "responses": { "200": { "description": "OK" }, "401": { "description": "Unauthorized" } } } },
+    "/labs": { "get": { "tags": ["Labs"], "responses": { "200": { "description": "OK" } } }, "post": { "tags": ["Labs"], "responses": { "201": { "description": "Created" } } } },
+    "/labs/{id}": { "put": { "tags": ["Labs"], "parameters": [{ "in": "path", "name": "id", "required": true, "schema": { "type": "integer" } }], "responses": { "200": { "description": "OK" } } }, "delete": { "tags": ["Labs"], "parameters": [{ "in": "path", "name": "id", "required": true, "schema": { "type": "integer" } }], "responses": { "204": { "description": "No Content" } } } },
+    "/categories": { "get": { "tags": ["Categories"], "responses": { "200": { "description": "OK" } } }, "post": { "tags": ["Categories"], "responses": { "201": { "description": "Created" } } } },
+    "/categories/{id}": { "put": { "tags": ["Categories"], "parameters": [{ "in": "path", "name": "id", "required": true, "schema": { "type": "integer" } }], "responses": { "200": { "description": "OK" } } }, "delete": { "tags": ["Categories"], "parameters": [{ "in": "path", "name": "id", "required": true, "schema": { "type": "integer" } }], "responses": { "204": { "description": "No Content" } } } },
+    "/inventory": { "get": { "tags": ["Inventory"], "responses": { "200": { "description": "OK" } } }, "post": { "tags": ["Inventory"], "responses": { "201": { "description": "Created" } } } },
+    "/inventory/{id}": { "get": { "tags": ["Inventory"], "parameters": [{ "in": "path", "name": "id", "required": true, "schema": { "type": "integer" } }], "responses": { "200": { "description": "OK" } } }, "put": { "tags": ["Inventory"], "parameters": [{ "in": "path", "name": "id", "required": true, "schema": { "type": "integer" } }], "responses": { "200": { "description": "OK" } } }, "delete": { "tags": ["Inventory"], "parameters": [{ "in": "path", "name": "id", "required": true, "schema": { "type": "integer" } }], "responses": { "204": { "description": "No Content" } } } },
+    "/borrowings": { "get": { "tags": ["Borrowings"], "responses": { "200": { "description": "OK" } } }, "post": { "tags": ["Borrowings"], "responses": { "201": { "description": "Created" } } } },
+    "/borrowings/{id}/approve": { "post": { "tags": ["Borrowings"], "parameters": [{ "in": "path", "name": "id", "required": true, "schema": { "type": "integer" } }], "responses": { "200": { "description": "OK" } } } },
+    "/borrowings/{id}/reject": { "post": { "tags": ["Borrowings"], "parameters": [{ "in": "path", "name": "id", "required": true, "schema": { "type": "integer" } }], "responses": { "200": { "description": "OK" } } } },
+    "/borrowings/{id}/return": { "post": { "tags": ["Borrowings"], "parameters": [{ "in": "path", "name": "id", "required": true, "schema": { "type": "integer" } }], "responses": { "200": { "description": "OK" } } } },
+    "/dashboard/summary": { "get": { "tags": ["Dashboard"], "responses": { "200": { "description": "OK" } } } },
+    "/export/borrowing": { "get": { "tags": ["Export"], "responses": { "200": { "description": "OK" } } } },
+    "/export/inventory": { "get": { "tags": ["Export"], "responses": { "200": { "description": "OK" } } } }
+  }
+}

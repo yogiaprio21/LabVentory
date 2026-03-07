@@ -1,0 +1,46 @@
+# Roadmap Peningkatan LabVentory
+
+## Fase 1: Interaktivitas & Profil (SELESAI)
+- [x] **Sistem Notifikasi**
+    - [x] Skema Database [Notification](file:///d:/PROJECT/Hosting/LabVentory/frontend/src/components/NotificationBell.tsx#5-12)
+    - [x] API Endpoints (List, Mark as Read)
+    - [x] Automasi pemicu notifikasi di level service
+    - [x] Komponen [NotificationBell](file:///d:/PROJECT/Hosting/LabVentory/frontend/src/components/NotificationBell.tsx#13-118) di Navbar
+- [x] **Profil Pengguna**
+    - [x] Halaman [ProfilePage.tsx](file:///d:/PROJECT/Hosting/LabVentory/frontend/src/pages/ProfilePage.tsx)
+    - [x] API Update Profile & Password
+    - [x] Integrasi ke sidebar/layout
+
+## Fase 2: Visual & UX Polish (SELESAI)
+- [x] **Dashboard Interaktif**
+    - [x] API Analytics (Tren & Distribusi)
+    - [x] Grafik Tren Peminjaman (Recharts)
+    - [x] Grafik Distribusi Alat (Pie Chart)
+- [x] **UX Optimization**
+    - [x] Komponen [TableSkeleton.tsx](file:///d:/PROJECT/Hosting/LabVentory/frontend/src/components/TableSkeleton.tsx)
+    - [x] Implementasi Skeleton di semua tabel (Inventory, Borrowings, Users, Labs, Reports, Audit)
+
+## Fase 3: Kedalaman Operasional (SELESAI)
+- [x] **Peringatan Stok & Audit**
+    - [x] Skema Database (`minStock` & Audit `details`)
+    - [x] Notifikasi Stok Rendah (In-app & Email)
+    - [x] Indikator Visual Stok Kritis di Frontend
+    - [x] Logging Granular (Before/After values)
+- [x] **Automasi Latar Belakang**
+    - [x] Cron Job Harian (Late & Due Soon)
+    - [x] Verifikasi Pengiriman Email
+
+## Persiapan Produksi (SELESAI)
+- [x] Audit Keamanan (CORS, Helmet, Rate Limit)
+- [x] Script Seed Produksi (Superadmin Initializer)
+- [x] Panduan Deployment (Supabase, Render, Vercel)
+- [x] Variabel Lingkungan (Env Vars) Terpusat
+
+---
+
+## Riwayat Tugas Selesai (Global Pagination & Modernisasi)
+- [x] Modernisasi Auth (Login/Register)
+- [x] Validasi Email Real-time
+- [x] Ekspor PDF Tabular & Branding
+- [x] Pagination Global (6 Halaman Utama)
+- [x] Audit Sistem & Roadmap Peningkatan
