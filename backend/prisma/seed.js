@@ -1,13 +1,15 @@
+require('dotenv').config()
 const { PrismaClient } = require('@prisma/client')
 const bcrypt = require('bcryptjs')
+const { env } = require('../src/config/env')
 const prisma = new PrismaClient()
 
 async function run() {
   console.log('Starting seed...')
 
-  // Use environment variables or defaults for the initial superadmin
-  const superEmail = process.env.INITIAL_SUPERADMIN_EMAIL || 'superadmin@labventory.com'
-  const superPassRaw = process.env.INITIAL_SUPERADMIN_PASSWORD || 'superadmin123'
+  // Use environment variables from centralized config
+  const superEmail = env.INITIAL_SUPERADMIN_EMAIL
+  const superPassRaw = env.INITIAL_SUPERADMIN_PASSWORD
   const superPass = await bcrypt.hash(superPassRaw, 10)
 
   // Ensure initial Super Admin exists
