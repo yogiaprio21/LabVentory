@@ -30,8 +30,9 @@ const checks = [
   },
   {
     file: 'frontend/src/components/StockCompositionPanel.tsx',
-    mustContain: ['StockCompositionPanel', 'Total units', 'Available units', 'Categories', 'Unavailable', 'Tooltip', 'aria-label="Stock composition legend"'],
-    label: 'Stock composition panel has readable legend, tooltip, and summary'
+    mustContain: ['StockCompositionPanel', "density?: StockCompositionDensity", 'data-density={density}', 'Total units', 'Available units', 'Categories', 'Unavailable', 'Tooltip', 'aria-label="Stock composition legend"', 'max-h-44 overflow-y-auto', 'break-words'],
+    mustNotContain: ['xl:grid-cols-[minmax(0,15rem)_1fr]'],
+    label: 'Stock composition panel has responsive density, readable legend, tooltip, and overflow-safe summary'
   },
   {
     file: 'backend/src/controllers/users.controller.js',
@@ -125,7 +126,7 @@ const checks = [
   },
   {
     file: 'frontend/src/pages/Superadmin/Analytics.tsx',
-    mustContain: ['Platform Analytics', '/analytics/summary', 'tenantDistribution', 'topLabs', 'StockCompositionPanel', 'Stock Composition'],
+    mustContain: ['Platform Analytics', '/analytics/summary', 'tenantDistribution', 'topLabs', 'StockCompositionPanel', 'Stock Composition', 'density="compact"', 'items-start'],
     label: 'Superadmin analytics uses the dedicated platform analytics endpoint and UI'
   },
   {
@@ -204,7 +205,8 @@ const checks = [
       'Copy JSON',
       'Search permission',
       "section: 'Platform'",
-      "section: 'Governance'"
+      "section: 'Governance'",
+      'density="compact"'
     ],
     label: 'Preview page mirrors current platform, operations, administration, and governance surfaces'
   }
@@ -215,13 +217,17 @@ for (const check of checks) {
   const abs = path.join(root, check.file)
   const content = fs.readFileSync(abs, 'utf8')
   const missing = check.mustContain.filter(token => !content.includes(token))
-  if (missing.length) failures.push({ ...check, missing })
+  const forbidden = (check.mustNotContain || []).filter(token => content.includes(token))
+  if (missing.length || forbidden.length) failures.push({ ...check, missing, forbidden })
 }
 
 if (failures.length) {
   console.error('Tenant audit failed:')
   for (const failure of failures) {
-    console.error(`- ${failure.label}: missing ${failure.missing.join(', ')}`)
+    const details = []
+    if (failure.missing.length) details.push(`missing ${failure.missing.join(', ')}`)
+    if (failure.forbidden.length) details.push(`forbidden ${failure.forbidden.join(', ')}`)
+    console.error(`- ${failure.label}: ${details.join('; ')}`)
   }
   process.exit(1)
 }

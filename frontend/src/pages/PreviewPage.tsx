@@ -176,8 +176,8 @@ function AnalyticsPreview() {
         </section>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-        <StockCompositionPanel data={stockComposition} title="Stock Composition" description="Total and available units by category" />
+      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+        <StockCompositionPanel data={stockComposition} title="Stock Composition" description="Total and available units by category" density="compact" />
         <TopLabsPreview />
       </div>
     </div>
@@ -233,7 +233,7 @@ function DashboardPreview() {
           </div>
           <TrendBars />
         </section>
-        <StockCompositionPanel data={stockComposition} title="Stock Units by Category" description="Total and available units in your scope" icon="barChart" />
+        <StockCompositionPanel data={stockComposition} title="Stock Units by Category" description="Total and available units in your scope" icon="barChart" density="compact" />
       </div>
     </div>
   )

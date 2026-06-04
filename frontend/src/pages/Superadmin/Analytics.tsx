@@ -152,8 +152,8 @@ export default function Analytics() {
         </section>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-        <StockCompositionPanel data={stockData} title="Stock Composition" description="Total and available units by category" />
+      <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+        <StockCompositionPanel data={stockData} title="Stock Composition" description="Total and available units by category" density="compact" />
 
         <section className="table-shell overflow-hidden bg-white">
           <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/60 px-6 py-4">
