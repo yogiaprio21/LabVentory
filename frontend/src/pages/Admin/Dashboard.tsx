@@ -1,10 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ResponsiveContainer, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, PieChart, Pie, Cell } from 'recharts'
+import { ResponsiveContainer, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip } from 'recharts'
 import { api } from '../../hooks/useApi'
-import TableSkeleton from '../../components/TableSkeleton'
 import { EmptyState, Icon, PageHeader, StatusBadge } from '../../components/ui'
-
-const COLORS = ['#4f46e5', '#0891b2', '#059669', '#d97706', '#e11d48', '#7c3aed']
+import StockCompositionPanel from '../../components/StockCompositionPanel'
 
 const fillLastSevenDays = (rows: Array<{ day: string; count: number }> = []) => {
   const counts = new Map(rows.map(row => [new Date(row.day).toISOString().slice(0, 10), Number(row.count) || 0]))
@@ -79,7 +77,6 @@ export default function Dashboard() {
   const dailyData = useMemo(() => fillLastSevenDays(summary?.dailyTrends), [summary?.dailyTrends])
   const hasBorrowingTrend = dailyData.some(row => row.count > 0)
   const stockData = Array.isArray(summary?.stockPerCategory) ? summary.stockPerCategory : []
-  const hasStockData = stockData.some((row: any) => Number(row.total) > 0)
 
   if (loading) return <LoadingState />
 
@@ -190,39 +187,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="card bg-white p-6">
-          <div className="mb-8 flex items-center justify-between">
-            <div>
-              <h2 className="text-xs font-black uppercase tracking-widest text-slate-800">Stock Units by Category</h2>
-              <p className="mt-1 text-[10px] font-bold text-slate-400">Total and available units in your scope</p>
-            </div>
-            <div className="rounded-lg bg-emerald-50 p-2 text-emerald-600"><Icon name="barChart" className="h-5 w-5" /></div>
-          </div>
-          <div className="h-80">
-            {hasStockData ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={stockData} dataKey="total" nameKey="name" innerRadius={70} outerRadius={108} paddingAngle={6} cornerRadius={5}>
-                    {stockData.map((_entry: any, index: number) => <Cell key={index} fill={COLORS[index % COLORS.length]} />)}
-                  </Pie>
-                  <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0', boxShadow: '0 12px 24px rgb(15 23 42 / 0.08)' }} />
-                </PieChart>
-              </ResponsiveContainer>
-            ) : (
-              <EmptyState title="No stock data" description="Category composition will appear after inventory is added." icon="package" />
-            )}
-          </div>
-          {hasStockData && (
-            <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {stockData.slice(0, 6).map((category: any, index: number) => (
-                <div key={category.name} className="flex min-w-0 items-center gap-2">
-                  <span className="h-2 w-2 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
-                  <span className="truncate text-[10px] font-bold uppercase tracking-tight text-slate-500">{category.name} ({category.available}/{category.total})</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        <StockCompositionPanel data={stockData} title="Stock Units by Category" description="Total and available units in your scope" icon="barChart" />
       </div>
     </div>
   )

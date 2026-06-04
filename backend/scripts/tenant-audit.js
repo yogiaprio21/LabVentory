@@ -29,6 +29,11 @@ const checks = [
     label: 'Preview page has URL-backed interactive navigation'
   },
   {
+    file: 'frontend/src/components/StockCompositionPanel.tsx',
+    mustContain: ['StockCompositionPanel', 'Total units', 'Available units', 'Categories', 'Unavailable', 'Tooltip', 'aria-label="Stock composition legend"'],
+    label: 'Stock composition panel has readable legend, tooltip, and summary'
+  },
+  {
     file: 'backend/src/controllers/users.controller.js',
     mustContain: ['status: true', 'action: \'deactivate\'', 'Resolve active borrowings before deactivating this user'],
     label: 'User removal is soft-deactivate with active borrowing guard'
@@ -120,12 +125,12 @@ const checks = [
   },
   {
     file: 'frontend/src/pages/Superadmin/Analytics.tsx',
-    mustContain: ['Platform Analytics', '/analytics/summary', 'tenantDistribution', 'topLabs'],
+    mustContain: ['Platform Analytics', '/analytics/summary', 'tenantDistribution', 'topLabs', 'StockCompositionPanel', 'Stock Composition'],
     label: 'Superadmin analytics uses the dedicated platform analytics endpoint and UI'
   },
   {
     file: 'frontend/src/pages/Admin/Dashboard.tsx',
-    mustContain: ['Operations Dashboard', '/dashboard/summary', 'fillLastSevenDays', 'No borrowing activity'],
+    mustContain: ['Operations Dashboard', '/dashboard/summary', 'fillLastSevenDays', 'No borrowing activity', 'StockCompositionPanel', 'Stock Units by Category'],
     label: 'Dashboard is scoped operational summary with chart empty states'
   },
   {
@@ -182,6 +187,26 @@ const checks = [
     file: 'frontend/src/pages/Superadmin/AccessControl.tsx',
     mustContain: ['/acl/matrix', 'rolePermissions', 'Search permission'],
     label: 'Access Control page renders role-permission matrix from backend ACL'
+  },
+  {
+    file: 'frontend/src/pages/PreviewPage.tsx',
+    mustContain: [
+      'Platform Analytics',
+      'Operations Dashboard',
+      'Access Control',
+      'Institutions',
+      'Labs',
+      'Users',
+      'Download QR',
+      'Print',
+      'Payload: inventory:',
+      'View details',
+      'Copy JSON',
+      'Search permission',
+      "section: 'Platform'",
+      "section: 'Governance'"
+    ],
+    label: 'Preview page mirrors current platform, operations, administration, and governance surfaces'
   }
 ]
 

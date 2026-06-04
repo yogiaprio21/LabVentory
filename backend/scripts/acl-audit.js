@@ -62,6 +62,14 @@ if (auditPage.includes('JSON.stringify')) fail('Frontend audit details', 'AuditP
 if (!auditPage.includes('formatAuditDetails')) fail('Frontend audit details', 'AuditPage does not use the audit detail formatter')
 if (!auditPage.includes('Copy JSON')) fail('Frontend audit details', 'AuditPage is missing a raw JSON copy option for admins')
 
+const previewPage = read('frontend/src/pages/PreviewPage.tsx')
+for (const token of ['Platform Analytics', 'Operations Dashboard', 'Access Control', 'Download QR', 'Copy JSON', 'Search permission']) {
+  if (!previewPage.includes(token)) fail('Frontend preview sync', `PreviewPage missing ${token}`)
+}
+if (!previewPage.includes("section: 'Platform'") || !previewPage.includes("section: 'Governance'")) {
+  fail('Frontend preview navigation', 'PreviewPage is not grouped by current functional navigation sections')
+}
+
 const sensitiveUiChecks = [
   ['frontend/src/pages/Inventory/InventoryPage.tsx', ['inventory.create', 'inventory.update', 'inventory.delete', 'report.export']],
   ['frontend/src/pages/Borrowings/BorrowingsPage.tsx', ['borrowing.approve', 'borrowing.reject', 'borrowing.return', 'borrowing.markDamaged', 'borrowing.markLost']],

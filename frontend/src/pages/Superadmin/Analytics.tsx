@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ResponsiveContainer, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, PieChart, Pie, Cell, BarChart, Bar } from 'recharts'
+import { ResponsiveContainer, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, BarChart, Bar } from 'recharts'
 import { api } from '../../hooks/useApi'
 import { EmptyState, Icon, PageHeader, StatusBadge } from '../../components/ui'
-
-const COLORS = ['#4f46e5', '#0891b2', '#059669', '#d97706', '#e11d48', '#7c3aed']
+import StockCompositionPanel from '../../components/StockCompositionPanel'
 
 const fillLastSevenDays = (rows: Array<{ day: string; count: number }> = []) => {
   const counts = new Map(rows.map(row => [new Date(row.day).toISOString().slice(0, 10), Number(row.count) || 0]))
@@ -63,7 +62,6 @@ export default function Analytics() {
   const topLabs = Array.isArray(summary?.topLabs) ? summary.topLabs : []
   const hasBorrowingTrend = dailyData.some(row => row.count > 0)
   const hasTenantData = tenantDistribution.some((row: any) => row.items > 0 || row.labs > 0 || row.users > 0)
-  const hasStockData = stockData.some((row: any) => Number(row.total) > 0)
 
   if (loading) {
     return (
@@ -155,29 +153,7 @@ export default function Analytics() {
       </div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-        <section className="card bg-white p-6">
-          <div className="mb-6 flex items-center justify-between">
-            <div>
-              <h2 className="text-xs font-black uppercase tracking-widest text-slate-800">Stock Composition</h2>
-              <p className="mt-1 text-[10px] font-bold text-slate-400">Total units by category</p>
-            </div>
-            <Icon name="package" className="h-5 w-5 text-emerald-600" />
-          </div>
-          <div className="h-72">
-            {hasStockData ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={stockData} dataKey="total" nameKey="name" innerRadius={62} outerRadius={100} paddingAngle={6} cornerRadius={5}>
-                    {stockData.map((_entry: any, index: number) => <Cell key={index} fill={COLORS[index % COLORS.length]} />)}
-                  </Pie>
-                  <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0', boxShadow: '0 12px 24px rgb(15 23 42 / 0.08)' }} />
-                </PieChart>
-              </ResponsiveContainer>
-            ) : (
-              <EmptyState title="No stock categories" description="Category composition will appear after inventory is added." icon="package" />
-            )}
-          </div>
-        </section>
+        <StockCompositionPanel data={stockData} title="Stock Composition" description="Total and available units by category" />
 
         <section className="table-shell overflow-hidden bg-white">
           <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/60 px-6 py-4">
