@@ -1,5 +1,5 @@
 const { prisma } = require('../prisma/client')
-const { assertLabAccess, assertCategoryAccess, scopedCategoryWhere, isPlatformAdmin, isInstitutionAdmin } = require('../utils/tenancy')
+const { assertActiveLabAccess, assertCategoryAccess, scopedCategoryWhere, isPlatformAdmin, isInstitutionAdmin } = require('../utils/tenancy')
 
 const createCategory = async (req, res) => {
   const { name, labId } = req.body
@@ -14,7 +14,7 @@ const createCategory = async (req, res) => {
     throw e
   }
 
-  await assertLabAccess(req.user, useLab)
+  await assertActiveLabAccess(req.user, useLab)
   const cat = await prisma.category.create({ data: { name, labId: Number(useLab) } })
   res.status(201).json(cat)
 }

@@ -1,6 +1,9 @@
 const { z } = require('zod')
 
 const roleEnum = z.enum(['platform_admin', 'institution_admin', 'lab_admin', 'admin', 'student', 'superadmin'])
+const inviteRoleEnum = z.enum(['institution_admin', 'lab_admin', 'admin', 'student'])
+const inviteStatusEnum = z.enum(['active', 'revoked', 'used', 'expired'])
+const tenantStatusEnum = z.enum(['active', 'inactive'])
 
 const auth = {
     login: z.object({
@@ -24,8 +27,58 @@ const auth = {
             name: z.string().min(2),
             email: z.string().email(),
             password: z.string().min(6),
+            inviteCode: z.string().min(6).optional(),
             institutionSlug: z.string().min(1).optional(),
-            labId: z.number()
+            labId: z.number().optional()
+        })
+    })
+}
+
+const institutions = {
+    upsert: z.object({
+        body: z.object({
+            name: z.string().min(2).optional(),
+            slug: z.string().min(2).optional(),
+            status: z.enum(['active', 'inactive', 'archived']).optional(),
+            domain: z.string().min(3).nullable().optional(),
+            registrationMode: z.enum(['invite', 'public']).optional()
+        })
+    }),
+    create: z.object({
+        body: z.object({
+            name: z.string().min(2),
+            slug: z.string().min(2).optional(),
+            status: z.enum(['active', 'inactive', 'archived']).optional(),
+            domain: z.string().min(3).nullable().optional(),
+            registrationMode: z.enum(['invite', 'public']).optional(),
+            admin: z.object({
+                name: z.string().min(2),
+                email: z.string().email(),
+                password: z.string().min(6)
+            }).optional()
+        })
+    })
+}
+
+const invitations = {
+    create: z.object({
+        body: z.object({
+            institutionId: z.number().optional(),
+            labId: z.number().nullable().optional(),
+            role: inviteRoleEnum.default('student'),
+            maxUses: z.number().int().min(1).max(500).optional(),
+            expiresAt: z.string().refine(val => !isNaN(Date.parse(val)), { message: 'Invalid date format' }).optional()
+        })
+    }),
+    update: z.object({
+        body: z.object({
+            status: inviteStatusEnum.optional(),
+            expiresAt: z.string().refine(val => !isNaN(Date.parse(val)), { message: 'Invalid date format' }).optional()
+        })
+    }),
+    codeParam: z.object({
+        params: z.object({
+            code: z.string().min(6)
         })
     })
 }
@@ -36,6 +89,7 @@ const users = {
             name: z.string().min(2).optional(),
             email: z.string().email().optional(),
             role: roleEnum.optional(),
+            status: tenantStatusEnum.optional(),
             institutionId: z.number().nullable().optional(),
             labId: z.number().nullable().optional(),
             password: z.string().min(6).optional()
@@ -83,4 +137,4 @@ const common = {
     })
 }
 
-module.exports = { auth, users, inventory, borrowings, common }
+module.exports = { auth, institutions, invitations, users, inventory, borrowings, common }

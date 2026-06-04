@@ -13,7 +13,11 @@ const createSchema = z.object({
 })
 
 const updateSchema = z.object({
-  body: z.object({ name: z.string().min(1), location: z.string().min(1) }),
+  body: z.object({
+    name: z.string().min(1).optional(),
+    location: z.string().min(1).optional(),
+    status: z.enum(['active', 'inactive']).optional()
+  }),
   params: z.object({ id: z.string().regex(/^\d+$/) }),
   query: z.object({}).optional()
 })

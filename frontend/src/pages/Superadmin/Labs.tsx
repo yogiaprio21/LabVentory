@@ -3,7 +3,7 @@ import { api } from '../../hooks/useApi'
 import toast from 'react-hot-toast'
 import type { Institution, Lab } from '../../types'
 import TableSkeleton from '../../components/TableSkeleton'
-import { Button, ConfirmDialog, EmptyState, Field, Icon, PageHeader, Pagination, SelectField, iconButtonLabel } from '../../components/ui'
+import { Button, ConfirmDialog, EmptyState, Field, Icon, PageHeader, Pagination, SelectField, StatusBadge, iconButtonLabel } from '../../components/ui'
 import { useAuth } from '../../hooks/useAuth'
 import { isPlatformAdmin } from '../../utils/roles'
 
@@ -15,7 +15,13 @@ export default function Labs() {
   const [name, setName] = useState('')
   const [location, setLocation] = useState('')
   const [institutionId, setInstitutionId] = useState('')
-  const [newInstitutionName, setNewInstitutionName] = useState('')
+  const [newInstitution, setNewInstitution] = useState({
+    name: '',
+    registrationMode: 'invite',
+    adminName: '',
+    adminEmail: '',
+    adminPassword: ''
+  })
   const [editId, setEditId] = useState<number | null>(null)
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
@@ -74,12 +80,24 @@ export default function Labs() {
   }
 
   const createInstitution = async () => {
-    if (!newInstitutionName.trim()) return toast.error('Please enter an institution name')
+    if (!newInstitution.name.trim()) return toast.error('Please enter an institution name')
     try {
-      const res = await api.post('/institutions', { name: newInstitutionName.trim() })
-      setInstitutions(prev => [...prev, res.data].sort((a, b) => a.name.localeCompare(b.name)))
-      setInstitutionId(String(res.data.id))
-      setNewInstitutionName('')
+      const payload: any = {
+        name: newInstitution.name.trim(),
+        registrationMode: newInstitution.registrationMode
+      }
+      if (newInstitution.adminName && newInstitution.adminEmail && newInstitution.adminPassword) {
+        payload.admin = {
+          name: newInstitution.adminName,
+          email: newInstitution.adminEmail,
+          password: newInstitution.adminPassword
+        }
+      }
+      const res = await api.post('/institutions', payload)
+      const created = res.data.institution || res.data
+      setInstitutions(prev => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)))
+      setInstitutionId(String(created.id))
+      setNewInstitution({ name: '', registrationMode: 'invite', adminName: '', adminEmail: '', adminPassword: '' })
       toast.success('Institution created')
     } catch (e: any) {
       toast.error(e?.response?.data?.error || 'Failed to create institution')
@@ -91,13 +109,23 @@ export default function Labs() {
     setDeleting(true)
     try {
       await api.delete(`/labs/${confirmDelete.id}`)
-      toast.success('Laboratory removed')
+      toast.success('Laboratory deactivated')
       setConfirmDelete(null)
       load(page)
     } catch (e: any) {
       toast.error(e?.response?.data?.error || 'Failed to remove laboratory')
     } finally {
       setDeleting(false)
+    }
+  }
+
+  const setLabStatus = async (id: number, status: 'active' | 'inactive') => {
+    try {
+      await api.put(`/labs/${id}`, { status })
+      toast.success(status === 'active' ? 'Laboratory activated' : 'Laboratory deactivated')
+      load(page)
+    } catch (e: any) {
+      toast.error(e?.response?.data?.error || 'Failed to update laboratory status')
     }
   }
 
@@ -111,9 +139,20 @@ export default function Labs() {
           {editId && <Button variant="ghost" size="sm" onClick={reset}>Cancel edit</Button>}
         </div>
         {platform && (
-          <div className="mb-4 grid grid-cols-1 gap-3 rounded-lg border border-indigo-100 bg-indigo-50/50 p-3 md:grid-cols-[1fr_auto] md:items-end">
-            <Field label="New institution" placeholder="e.g. Faculty of Engineering" value={newInstitutionName} onChange={e => setNewInstitutionName(e.target.value)} />
-            <Button variant="secondary" icon="building" onClick={createInstitution}>Create Institution</Button>
+          <div className="mb-4 rounded-lg border border-indigo-100 bg-indigo-50/50 p-3">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_12rem_auto] md:items-end">
+              <Field label="New institution" placeholder="e.g. Faculty of Engineering" value={newInstitution.name} onChange={e => setNewInstitution(f => ({ ...f, name: e.target.value }))} />
+              <SelectField label="Register mode" value={newInstitution.registrationMode} onChange={e => setNewInstitution(f => ({ ...f, registrationMode: e.target.value }))}>
+                <option value="invite">Invite only</option>
+                <option value="public">Public</option>
+              </SelectField>
+              <Button variant="secondary" icon="building" onClick={createInstitution}>Create Institution</Button>
+            </div>
+            <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
+              <Field label="First admin name" placeholder="Optional" value={newInstitution.adminName} onChange={e => setNewInstitution(f => ({ ...f, adminName: e.target.value }))} />
+              <Field label="First admin email" type="email" placeholder="admin@institution.ac.id" value={newInstitution.adminEmail} onChange={e => setNewInstitution(f => ({ ...f, adminEmail: e.target.value }))} />
+              <Field label="First admin password" type="password" placeholder="Min. 6 chars" value={newInstitution.adminPassword} onChange={e => setNewInstitution(f => ({ ...f, adminPassword: e.target.value }))} />
+            </div>
           </div>
         )}
         <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_1fr_1fr_auto] md:items-end">
@@ -142,6 +181,7 @@ export default function Labs() {
                   <th className="px-6 py-4">ID</th>
                   <th className="px-6 py-4">Laboratory</th>
                   {platform && <th className="px-6 py-4">Institution</th>}
+                  <th className="px-6 py-4">Status</th>
                   <th className="px-6 py-4">Location</th>
                   <th className="px-6 py-4 text-right">Actions</th>
                 </tr>
@@ -152,11 +192,16 @@ export default function Labs() {
                     <td className="px-6 py-4 font-mono text-xs text-slate-400">{l.id}</td>
                     <td className="px-6 py-4 font-bold text-slate-950">{l.name}</td>
                     {platform && <td className="px-6 py-4 font-medium text-slate-600">{l.institution?.name || `Institution ${l.institutionId}`}</td>}
+                    <td className="px-6 py-4"><StatusBadge tone={l.status === 'inactive' ? 'slate' : 'emerald'}>{l.status || 'active'}</StatusBadge></td>
                     <td className="px-6 py-4 font-medium text-slate-600">{l.location}</td>
                     <td className="px-6 py-4">
                       <div className="flex justify-end gap-2">
                         <Button variant="secondary" size="icon" onClick={() => { setEditId(l.id); setName(l.name); setLocation(l.location); setInstitutionId(String(l.institutionId || '')) }} {...iconButtonLabel(`Edit ${l.name}`)}><Icon name="edit" /></Button>
-                        <Button variant="secondary" size="icon" onClick={() => setConfirmDelete({ id: l.id, name: l.name })} {...iconButtonLabel(`Delete ${l.name}`)}><Icon name="trash" className="text-rose-600" /></Button>
+                        {l.status === 'inactive' ? (
+                          <Button variant="secondary" size="icon" onClick={() => setLabStatus(l.id, 'active')} {...iconButtonLabel(`Activate ${l.name}`)}><Icon name="refresh" className="text-emerald-600" /></Button>
+                        ) : (
+                          <Button variant="secondary" size="icon" onClick={() => setConfirmDelete({ id: l.id, name: l.name })} {...iconButtonLabel(`Deactivate ${l.name}`)}><Icon name="trash" className="text-rose-600" /></Button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -177,11 +222,16 @@ export default function Labs() {
                   <h3 className="font-extrabold text-slate-950">{l.name}</h3>
                   {platform && <p className="text-xs font-semibold text-indigo-600">{l.institution?.name || `Institution ${l.institutionId}`}</p>}
                   <p className="text-sm text-slate-500">{l.location}</p>
+                  <div className="mt-2"><StatusBadge tone={l.status === 'inactive' ? 'slate' : 'emerald'}>{l.status || 'active'}</StatusBadge></div>
                 </div>
               </div>
               <div className="mt-4 grid grid-cols-2 gap-2">
                 <Button variant="secondary" icon="edit" onClick={() => { setEditId(l.id); setName(l.name); setLocation(l.location); setInstitutionId(String(l.institutionId || '')) }}>Edit</Button>
-                <Button variant="secondary" icon="trash" onClick={() => setConfirmDelete({ id: l.id, name: l.name })}>Delete</Button>
+                {l.status === 'inactive' ? (
+                  <Button variant="secondary" icon="refresh" onClick={() => setLabStatus(l.id, 'active')}>Activate</Button>
+                ) : (
+                  <Button variant="secondary" icon="trash" onClick={() => setConfirmDelete({ id: l.id, name: l.name })}>Deactivate</Button>
+                )}
               </div>
             </article>
           ))}
@@ -192,9 +242,9 @@ export default function Labs() {
 
       <ConfirmDialog
         open={!!confirmDelete}
-        title="Delete laboratory?"
-        description={`This will remove "${confirmDelete?.name || 'this lab'}". Inventory assigned to this lab may also be affected.`}
-        confirmLabel="Delete lab"
+        title="Deactivate laboratory?"
+        description={`This will hide "${confirmDelete?.name || 'this lab'}" from new registration and operations while keeping inventory, borrowing, and audit history.`}
+        confirmLabel="Deactivate lab"
         loading={deleting}
         onCancel={() => setConfirmDelete(null)}
         onConfirm={remove}

@@ -26,20 +26,31 @@ enum BorrowStatus {
   lost
 }
 
+enum InviteStatus {
+  active
+  revoked
+  used
+  expired
+}
+
 model User {
   id        Int           @id @default(autoincrement())
   name      String
   email     String        @unique
   password  String
   role      Role
+  status    String        @default("active")
   institutionId Int?
   institution Institution? @relation(fields: [institutionId], references: [id])
   labId     Int?
   lab       Lab?          @relation(fields: [labId], references: [id])
   borrowings Borrowing[]
+  createdInvites Invitation[] @relation("InvitationCreator")
   auditLogs AuditLog[]
   notifications Notification[]
   createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  @@index([status])
   @@index([institutionId])
   @@index([labId])
 }
@@ -52,11 +63,13 @@ model Notification {
   user      User     @relation(fields: [userId], references: [id])
   title     String
   message   String
+  dedupeKey String?
   isRead    Boolean  @default(false)
   createdAt DateTime @default(now())
   @@index([institutionId])
   @@index([userId])
   @@index([isRead])
+  @@unique([userId, dedupeKey])
 }
 
 model Institution {
@@ -64,11 +77,16 @@ model Institution {
   name      String
   slug      String   @unique
   status    String   @default("active")
+  domain    String?
+  registrationMode String @default("invite")
   labs      Lab[]
   users     User[]
+  invitations Invitation[]
   notifications Notification[]
   auditLogs AuditLog[]
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([status])
 }
 
 model Lab {
@@ -77,12 +95,38 @@ model Lab {
   institution Institution @relation(fields: [institutionId], references: [id])
   name       String
   location   String
+  status     String      @default("active")
   users      User[]
   categories Category[]
   inventory  Inventory[]
+  invitations Invitation[]
   createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
   @@index([institutionId])
+  @@index([status])
   @@unique([institutionId, name])
+}
+
+model Invitation {
+  id        Int          @id @default(autoincrement())
+  code      String       @unique
+  institutionId Int
+  institution Institution @relation(fields: [institutionId], references: [id])
+  labId     Int?
+  lab       Lab?         @relation(fields: [labId], references: [id])
+  role      Role         @default(student)
+  status    InviteStatus @default(active)
+  maxUses   Int          @default(1)
+  usedCount Int          @default(0)
+  expiresAt DateTime
+  createdById Int
+  createdBy User         @relation("InvitationCreator", fields: [createdById], references: [id])
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  @@index([institutionId])
+  @@index([labId])
+  @@index([status])
+  @@index([expiresAt])
 }
 
 model Category {
@@ -136,8 +180,8 @@ model AuditLog {
   id        Int      @id @default(autoincrement())
   institutionId Int?
   institution Institution? @relation(fields: [institutionId], references: [id])
-  userId    Int
-  user      User     @relation(fields: [userId], references: [id])
+  userId    Int?
+  user      User?    @relation(fields: [userId], references: [id])
   action    String
   entity    String
   entityId  Int

@@ -5,6 +5,8 @@ export type Institution = {
   name: string
   slug: string
   status?: string
+  domain?: string | null
+  registrationMode?: 'invite' | 'public'
 }
 
 export type User = {
@@ -12,13 +14,14 @@ export type User = {
   name: string
   email: string
   role: Role
+  status?: 'active' | 'inactive'
   institutionId?: number | null
   institution?: Institution | null
   labId: number | null
   lab?: Lab
 }
 
-export type Lab = { id: number; institutionId?: number; institution?: Institution; name: string; location: string }
+export type Lab = { id: number; institutionId?: number; institution?: Institution; name: string; location: string; status?: 'active' | 'inactive' }
 
 export type Category = { id: number; name: string; labId: number }
 

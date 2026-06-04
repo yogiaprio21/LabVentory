@@ -1,5 +1,19 @@
 const { prisma } = require('../prisma/client')
-const { scopedBorrowingWhere, scopedInventoryWhere } = require('../utils/tenancy')
+const { Prisma } = require('@prisma/client')
+const { scopedBorrowingWhere, scopedInventoryWhere, isPlatformAdmin, isInstitutionAdmin, isLabAdmin, tenantIdOf } = require('../utils/tenancy')
+
+const scopeConditions = (user) => {
+  if (isPlatformAdmin(user)) return []
+  if (isInstitutionAdmin(user)) return [Prisma.sql`l."institutionId" = ${tenantIdOf(user) || -1}`]
+  if (isLabAdmin(user)) return [Prisma.sql`i."labId" = ${user.labId || -1}`]
+  return [Prisma.sql`false`]
+}
+
+const whereSql = (conditions) => conditions.length
+  ? Prisma.sql`WHERE ${Prisma.join(conditions, ' AND ')}`
+  : Prisma.empty
+
+const toIso = (value) => new Date(value).toISOString()
 
 const summary = async (req, res) => {
   if (req.user.role === 'student') {
@@ -27,57 +41,54 @@ const summary = async (req, res) => {
     where: scopedBorrowingWhere(req.user, { status: 'late' })
   })
 
-  const [borrowings, items] = await Promise.all([
-    prisma.borrowing.findMany({
-      where: borrowingScope,
-      select: { borrowDate: true, quantity: true, inventory: { select: { name: true } } }
-    }),
-    prisma.inventory.findMany({
-      where: inventoryWhere,
-      select: {
-        totalStock: true,
-        availableStock: true,
-        category: { select: { name: true } }
-      }
-    })
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+  const baseConditions = scopeConditions(req.user)
+  const dailyConditions = [...baseConditions, Prisma.sql`b."borrowDate" >= ${sevenDaysAgo}`]
+
+  const [monthlyRows, mostBorrowedRows, stockRows, dailyRows] = await Promise.all([
+    prisma.$queryRaw`
+      SELECT date_trunc('month', b."borrowDate") AS month, COUNT(*)::int AS count
+      FROM "Borrowing" b
+      JOIN "Inventory" i ON i."id" = b."inventoryId"
+      JOIN "Lab" l ON l."id" = i."labId"
+      ${whereSql(baseConditions)}
+      GROUP BY 1
+      ORDER BY 1 ASC
+    `,
+    prisma.$queryRaw`
+      SELECT i."name" AS name, COALESCE(SUM(b."quantity"), 0)::int AS count
+      FROM "Borrowing" b
+      JOIN "Inventory" i ON i."id" = b."inventoryId"
+      JOIN "Lab" l ON l."id" = i."labId"
+      ${whereSql(baseConditions)}
+      GROUP BY i."name"
+      ORDER BY count DESC, i."name" ASC
+      LIMIT 5
+    `,
+    prisma.$queryRaw`
+      SELECT c."name" AS name, COALESCE(SUM(i."totalStock"), 0)::int AS total, COALESCE(SUM(i."availableStock"), 0)::int AS available
+      FROM "Inventory" i
+      JOIN "Category" c ON c."id" = i."categoryId"
+      JOIN "Lab" l ON l."id" = i."labId"
+      ${whereSql(baseConditions)}
+      GROUP BY c."name"
+      ORDER BY c."name" ASC
+    `,
+    prisma.$queryRaw`
+      SELECT date_trunc('day', b."borrowDate") AS day, COUNT(*)::int AS count
+      FROM "Borrowing" b
+      JOIN "Inventory" i ON i."id" = b."inventoryId"
+      JOIN "Lab" l ON l."id" = i."labId"
+      ${whereSql(dailyConditions)}
+      GROUP BY 1
+      ORDER BY 1 ASC
+    `
   ])
 
-  const monthlyMap = new Map()
-  const dailyMap = new Map()
-  const borrowedMap = new Map()
-  const stockMap = new Map()
-  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-
-  for (const b of borrowings) {
-    const monthKey = new Date(b.borrowDate.getFullYear(), b.borrowDate.getMonth(), 1).toISOString()
-    monthlyMap.set(monthKey, (monthlyMap.get(monthKey) || 0) + 1)
-    borrowedMap.set(b.inventory.name, (borrowedMap.get(b.inventory.name) || 0) + b.quantity)
-
-    if (b.borrowDate >= sevenDaysAgo) {
-      const dayKey = new Date(b.borrowDate.getFullYear(), b.borrowDate.getMonth(), b.borrowDate.getDate()).toISOString()
-      dailyMap.set(dayKey, (dailyMap.get(dayKey) || 0) + 1)
-    }
-  }
-
-  for (const item of items) {
-    const name = item.category.name
-    const current = stockMap.get(name) || { name, total: 0, available: 0 }
-    current.total += item.totalStock
-    current.available += item.availableStock
-    stockMap.set(name, current)
-  }
-
-  const monthly = Array.from(monthlyMap.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([month, count]) => ({ month, count }))
-  const mostBorrowed = Array.from(borrowedMap.entries())
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5)
-    .map(([name, count]) => ({ name, count }))
-  const stockPerCategory = Array.from(stockMap.values())
-  const dailyTrends = Array.from(dailyMap.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([day, count]) => ({ day, count }))
+  const monthly = monthlyRows.map(row => ({ month: toIso(row.month), count: row.count }))
+  const mostBorrowed = mostBorrowedRows.map(row => ({ name: row.name, count: row.count }))
+  const stockPerCategory = stockRows.map(row => ({ name: row.name, total: row.total, available: row.available }))
+  const dailyTrends = dailyRows.map(row => ({ day: toIso(row.day), count: row.count }))
 
   res.json({ totalItems, totalBorrowed, lateCount, monthly, mostBorrowed, stockPerCategory, dailyTrends })
 }

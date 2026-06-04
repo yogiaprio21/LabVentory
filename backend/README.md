@@ -69,6 +69,7 @@ PORT=4000
 DATABASE_URL=postgresql://USER:PASSWORD@HOST:PORT/DB?schema=public
 JWT_SECRET=<random-64-byte-hex>
 JWT_EXPIRES_IN=7d
+CORS_ORIGINS=https://lab-ventory.vercel.app,http://localhost:5173
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
 SMTP_USER=akun@gmail.com
@@ -78,6 +79,8 @@ MAIL_FROM="LabVentory <akun@gmail.com>"
 
 Catatan:
 - JWT_SECRET harus panjang & acak (64-byte hex disarankan).
+- Production wajib mengisi `CORS_ORIGINS` atau `FRONTEND_ORIGIN`; pisahkan banyak origin dengan koma.
+- Jalankan `npm run prisma:deploy` pada environment produksi sebelum `npm start`.
 - Gmail memerlukan 2FA + App Password (bukan password biasa). Tulis tanpa spasi.
 - Port 587 = STARTTLS, 465 = SMTPS (secure). Transporter otomatis secure untuk 465.
 
@@ -99,6 +102,13 @@ REST base path: `/api` | Swagger UI: `http://localhost:4000/docs`.
 
 ```bash
 npm start
+```
+
+Checklist sebelum deploy:
+
+```bash
+npm run verify
+npm run prisma:deploy
 ```
 
 Atau menggunakan Docker:
@@ -164,7 +174,10 @@ Dokumentasi lengkap tersedia di Swagger UI.
   "seed": "node prisma/seed.js",
   "prisma:generate": "prisma generate",
   "prisma:migrate": "prisma migrate dev",
-  "prisma:deploy": "prisma migrate deploy"
+  "prisma:deploy": "prisma migrate deploy",
+  "audit:tenant": "node scripts/tenant-audit.js",
+  "check:syntax": "node scripts/syntax-check.js",
+  "verify": "prisma validate && prisma generate && npm run check:syntax && npm run audit:tenant"
 }
 ```
 
@@ -177,4 +190,3 @@ Dokumentasi lengkap tersedia di Swagger UI.
 ## Lisensi
 
 Internal/Proprietary. Sesuaikan dengan kebutuhan Anda.
-

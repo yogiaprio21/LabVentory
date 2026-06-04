@@ -6,7 +6,7 @@ const { assertInventoryAccess, assertBorrowingAccess, scopedBorrowingWhere } = r
 const create = async (req, res) => {
   const { inventoryId, quantity, dueDate } = req.body
   await assertInventoryAccess(req.user, inventoryId)
-  const borrow = await requestBorrow({ userId: req.user.id, inventoryId, quantity, dueDate })
+  const borrow = await requestBorrow({ actor: req.user, userId: req.user.id, inventoryId, quantity, dueDate })
   await logAudit({ userId: req.user.id, action: 'create', entity: 'borrowing', entityId: borrow.id })
   res.status(201).json(borrow)
 }
@@ -19,7 +19,7 @@ const approve = async (req, res) => {
     e.status = 404
     throw e
   }
-  const updated = await approveBorrow(id)
+  const updated = await approveBorrow(id, req.user)
   await logAudit({ userId: req.user.id, action: 'approve', entity: 'borrowing', entityId: id })
   res.json(updated)
 }
@@ -32,7 +32,7 @@ const reject = async (req, res) => {
     e.status = 404
     throw e
   }
-  const updated = await rejectBorrow(id)
+  const updated = await rejectBorrow(id, req.user)
   await logAudit({ userId: req.user.id, action: 'reject', entity: 'borrowing', entityId: id })
   res.json(updated)
 }
@@ -45,7 +45,7 @@ const returnItem = async (req, res) => {
     e.status = 404
     throw e
   }
-  const updated = await returnBorrow(id)
+  const updated = await returnBorrow(id, req.user)
   await logAudit({ userId: req.user.id, action: 'return', entity: 'borrowing', entityId: id })
   res.json(updated)
 }
@@ -93,7 +93,7 @@ const list = async (req, res) => {
 const markDamaged = async (req, res) => {
   const id = Number(req.params.id)
   await assertBorrowingAccess(req.user, id)
-  const updated = await serviceMarkDamaged(id)
+  const updated = await serviceMarkDamaged(id, req.user)
   await logAudit({ userId: req.user.id, action: 'mark_damaged', entity: 'borrowing', entityId: id })
   res.json(updated)
 }
@@ -101,7 +101,7 @@ const markDamaged = async (req, res) => {
 const markLost = async (req, res) => {
   const id = Number(req.params.id)
   await assertBorrowingAccess(req.user, id)
-  const updated = await serviceMarkLost(id)
+  const updated = await serviceMarkLost(id, req.user)
   await logAudit({ userId: req.user.id, action: 'mark_lost', entity: 'borrowing', entityId: id })
   res.json(updated)
 }

@@ -1,7 +1,7 @@
 const { prisma } = require('../prisma/client')
 const csv = require('csv-parser')
 const fs = require('fs')
-const { assertLabAccess, isPlatformAdmin, isInstitutionAdmin } = require('../utils/tenancy')
+const { assertActiveLabAccess, isPlatformAdmin, isInstitutionAdmin } = require('../utils/tenancy')
 
 const readCsv = (path) => new Promise((resolve, reject) => {
     const results = []
@@ -36,14 +36,14 @@ const importInventory = async (req, res) => {
 
     try {
         const rows = await readCsv(req.file.path)
-        const imports = []
+        const normalizedRows = []
         const labCache = new Map()
 
         for (const row of rows) {
             const currentLabId = defaultLabId || Number(row.labId)
             if (!currentLabId) continue
             if (!labCache.has(currentLabId)) {
-                labCache.set(currentLabId, await assertLabAccess(req.user, currentLabId))
+                labCache.set(currentLabId, await assertActiveLabAccess(req.user, currentLabId))
             }
 
             const totalStock = Number(row.totalStock)
@@ -55,26 +55,9 @@ const importInventory = async (req, res) => {
                 throw e
             }
 
-            const categoryName = row.category || 'Uncategorized'
-            let category = await prisma.category.findFirst({
-                where: {
-                    name: { equals: categoryName, mode: 'insensitive' },
-                    labId: currentLabId
-                }
-            })
-
-            if (!category) {
-                category = await prisma.category.create({
-                    data: {
-                        name: categoryName,
-                        labId: currentLabId
-                    }
-                })
-            }
-
-            imports.push({
+            normalizedRows.push({
                 name: row.name,
-                categoryId: category.id,
+                categoryName: row.category || 'Uncategorized',
                 labId: currentLabId,
                 totalStock,
                 availableStock,
@@ -84,11 +67,42 @@ const importInventory = async (req, res) => {
             })
         }
 
-        if (imports.length > 0) {
-            await prisma.inventory.createMany({ data: imports })
-        }
+        const imported = await prisma.$transaction(async (tx) => {
+            const imports = []
+            for (const row of normalizedRows) {
+                let category = await tx.category.findFirst({
+                    where: {
+                        name: { equals: row.categoryName, mode: 'insensitive' },
+                        labId: row.labId
+                    }
+                })
 
-        res.json({ message: `Successfully imported ${imports.length} items` })
+                if (!category) {
+                    category = await tx.category.create({
+                        data: {
+                            name: row.categoryName,
+                            labId: row.labId
+                        }
+                    })
+                }
+
+                imports.push({
+                    name: row.name,
+                    categoryId: category.id,
+                    labId: row.labId,
+                    totalStock: row.totalStock,
+                    availableStock: row.availableStock,
+                    minStock: row.minStock,
+                    location: row.location,
+                    condition: row.condition
+                })
+            }
+
+            if (imports.length > 0) await tx.inventory.createMany({ data: imports })
+            return imports.length
+        })
+
+        res.json({ message: `Successfully imported ${imported} items`, imported })
     } finally {
         cleanup(req.file.path)
     }

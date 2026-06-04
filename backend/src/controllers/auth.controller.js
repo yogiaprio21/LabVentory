@@ -1,9 +1,11 @@
 const { prisma } = require('../prisma/client')
 const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken')
+const { Prisma } = require('@prisma/client')
 const { env } = require('../config/env')
 const { logAudit } = require('../utils/audit')
-const { assertLabAccess, isPlatformAdmin, tenantIdOf, badRequest, forbidden } = require('../utils/tenancy')
+const { isInviteUsable } = require('../utils/invite')
+const { assertActiveLabAccess, isPlatformAdmin, tenantIdOf, badRequest, forbidden } = require('../utils/tenancy')
 
 const signToken = (user) => {
   const payload = { sub: user.id, role: user.role, institutionId: tenantIdOf(user), labId: user.labId }
@@ -15,6 +17,7 @@ const serializeUser = (user) => ({
   name: user.name,
   email: user.email,
   role: user.role,
+  status: user.status,
   institutionId: tenantIdOf(user),
   institution: user.institution || user.lab?.institution || null,
   labId: user.labId,
@@ -22,39 +25,105 @@ const serializeUser = (user) => ({
 })
 
 /**
- * Public student self-registration (role is always 'student')
- * Requires labId. Called from /auth/register without any token.
+ * Public registration. Without invite it creates a student in a public institution.
+ * With invite it creates the role encoded by the invitation.
  */
 const registerStudent = async (req, res) => {
-  const { name, email, password, labId, institutionSlug } = req.body
-  if (!labId) {
-    const e = new Error('labId is required for student registration')
-    e.status = 400
-    throw e
-  }
-  const lab = await prisma.lab.findFirst({
-    where: {
-      id: Number(labId),
-      ...(institutionSlug ? { institution: { slug: institutionSlug, status: 'active' } } : {})
-    },
-    include: { institution: true }
-  })
-  if (!lab) {
-    const e = new Error('Invalid laboratory selection')
-    e.status = 400
-    throw e
-  }
-  const existing = await prisma.user.findUnique({ where: { email: email.toLowerCase() } })
-  if (existing) {
-    const e = new Error('Email already in use')
-    e.status = 409
-    throw e
-  }
+  const { name, email, password, labId, institutionSlug, inviteCode } = req.body
   const hash = await bcrypt.hash(password, 10)
-  const user = await prisma.user.create({
-    data: { name, email: email.toLowerCase(), password: hash, role: 'student', institutionId: lab.institutionId, labId: lab.id },
-    include: { institution: true, lab: { include: { institution: true } } }
-  })
+  const user = await prisma.$transaction(async (tx) => {
+    const existing = await tx.user.findUnique({ where: { email: email.toLowerCase() } })
+    if (existing) {
+      const e = new Error('Email already in use')
+      e.status = 409
+      throw e
+    }
+
+    let role = 'student'
+    let selectedLab = null
+    let selectedInstitutionId = null
+    let invitation = null
+    const now = new Date()
+
+    if (inviteCode) {
+      invitation = await tx.invitation.findUnique({
+        where: { code: inviteCode },
+        include: { institution: true, lab: true }
+      })
+      if (!isInviteUsable(invitation)) {
+        const e = new Error('Invitation is invalid or expired')
+        e.status = 400
+        throw e
+      }
+      role = invitation.role
+      selectedInstitutionId = invitation.institutionId
+      if (['student', 'admin', 'lab_admin'].includes(role)) {
+        const useLabId = invitation.labId || Number(labId)
+        if (!useLabId) throw badRequest('labId is required for this invitation')
+        selectedLab = await tx.lab.findFirst({ where: { id: Number(useLabId), institutionId: selectedInstitutionId, status: 'active' }, include: { institution: true } })
+        if (!selectedLab) throw badRequest('Invalid laboratory selection')
+      }
+
+      const consumed = await tx.invitation.updateMany({
+        where: {
+          id: invitation.id,
+          status: 'active',
+          expiresAt: { gt: now },
+          usedCount: { lt: invitation.maxUses }
+        },
+        data: { usedCount: { increment: 1 } }
+      })
+      if (consumed.count !== 1) {
+        const e = new Error('Invitation is invalid or expired')
+        e.status = 400
+        throw e
+      }
+      await tx.invitation.updateMany({
+        where: { id: invitation.id, usedCount: { gte: invitation.maxUses } },
+        data: { status: 'used' }
+      })
+    } else {
+      if (!labId) throw badRequest('labId is required for student registration')
+      selectedLab = await tx.lab.findFirst({
+        where: {
+          id: Number(labId),
+          status: 'active',
+          institution: { slug: institutionSlug || 'default', status: 'active', registrationMode: 'public' }
+        },
+        include: { institution: true }
+      })
+      if (!selectedLab) throw badRequest('Invalid laboratory selection or registration requires an invitation')
+      selectedInstitutionId = selectedLab.institutionId
+    }
+
+    const created = await tx.user.create({
+      data: {
+        name,
+        email: email.toLowerCase(),
+        password: hash,
+        role,
+        institutionId: selectedInstitutionId,
+        labId: ['platform_admin', 'superadmin', 'institution_admin'].includes(role) ? null : selectedLab?.id || null
+      },
+      include: { institution: true, lab: { include: { institution: true } } }
+    })
+
+    if (invitation) {
+      await tx.auditLog.create({
+        data: {
+          userId: created.id,
+          institutionId: selectedInstitutionId,
+          action: 'consume',
+          entity: 'invitation',
+          entityId: invitation.id,
+          details: { role, labId: selectedLab?.id || null }
+        }
+      })
+    }
+
+    return created
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted })
+  await logAudit({ userId: user.id, institutionId: user.institutionId || user.lab?.institutionId || null, action: 'create', entity: 'user_registration', entityId: user.id, details: { invite: !!inviteCode, role: user.role } })
   res.status(201).json(serializeUser(user))
 }
 
@@ -77,7 +146,7 @@ const register = async (req, res) => {
   }
   let lab = null
   if (labId) {
-    lab = await assertLabAccess(req.user, Number(labId))
+    lab = await assertActiveLabAccess(req.user, Number(labId))
     targetInstitutionId = targetInstitutionId || lab.institutionId
     if (targetInstitutionId && lab.institutionId !== targetInstitutionId) throw badRequest('labId does not belong to selected institution')
   }
@@ -106,7 +175,7 @@ const register = async (req, res) => {
     },
     include: { institution: true, lab: { include: { institution: true } } }
   })
-  await logAudit({ userId: req.user.id, action: 'create', entity: 'user', entityId: user.id })
+  await logAudit({ userId: req.user.id, institutionId: targetInstitutionId, action: 'create', entity: 'user', entityId: user.id, details: { role } })
   res.status(201).json(serializeUser(user))
 }
 
@@ -117,12 +186,20 @@ const login = async (req, res) => {
     include: { institution: true, lab: { include: { institution: true } } }
   })
   if (!user) {
+    await logAudit({ userId: null, action: 'failed', entity: 'login', entityId: 0, details: { email: email.toLowerCase(), reason: 'invalid_credentials' } })
     const e = new Error('Invalid credentials')
     e.status = 401
     throw e
   }
+  if (user.status !== 'active' || (user.institution && user.institution.status !== 'active') || (user.lab && user.lab.status !== 'active')) {
+    await logAudit({ userId: user.id, institutionId: tenantIdOf(user), action: 'failed', entity: 'login', entityId: user.id, details: { reason: 'inactive_scope' } })
+    const e = new Error('Account is inactive')
+    e.status = 403
+    throw e
+  }
   const ok = await bcrypt.compare(password, user.password)
   if (!ok) {
+    await logAudit({ userId: user.id, institutionId: tenantIdOf(user), action: 'failed', entity: 'login', entityId: user.id, details: { reason: 'invalid_credentials' } })
     const e = new Error('Invalid credentials')
     e.status = 401
     throw e

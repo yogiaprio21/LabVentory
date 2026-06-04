@@ -45,13 +45,14 @@ export default function Login() {
             </div>
             <h1 className="text-5xl font-black tracking-tight text-slate-950">LabVentory</h1>
             <p className="mt-4 max-w-lg text-lg font-medium leading-8 text-slate-600">
-              Kelola stok, peminjaman, QR equipment, dan audit aktivitas lab dari satu workspace yang rapi.
+              Workspace inventaris lab multi-instansi dengan pemisahan data, invite registration, dan audit trail yang siap dipresentasikan sebagai portfolio.
             </p>
-            <div className="mt-8 grid max-w-lg grid-cols-3 gap-3">
+            <div className="mt-8 grid max-w-lg grid-cols-2 gap-3">
               {[
-                ['QR', 'Traceable items'],
-                ['PDF', 'Ready reports'],
-                ['RBAC', 'Role access']
+                ['Tenant-safe', 'Data separated by institution'],
+                ['Preview mode', 'Explore without an account'],
+                ['QR inventory', 'Traceable lab equipment'],
+                ['PDF reports', 'Export scoped reports']
               ].map(([label, desc]) => (
                 <div key={label} className="rounded-lg border border-white/70 bg-white/80 p-4 shadow-sm">
                   <p className="text-sm font-black text-slate-950">{label}</p>
@@ -73,8 +74,12 @@ export default function Login() {
 
           <form onSubmit={onSubmit} className="auth-card">
             <div className="mb-7">
-              <h2 className="text-2xl font-extrabold text-slate-950">Welcome back</h2>
-              <p className="mt-1 text-sm font-medium text-slate-500">Sign in to continue managing laboratory activity.</p>
+              <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-indigo-700">
+                <Icon name="shield" />
+                Secure workspace
+              </div>
+              <h2 className="text-2xl font-extrabold text-slate-950">Sign in to LabVentory</h2>
+              <p className="mt-1 text-sm font-medium leading-6 text-slate-500">Gunakan akun dari institusi/lab Anda. Reviewer portfolio bisa membuka preview tanpa login.</p>
             </div>
 
             <div className="space-y-5">
@@ -124,13 +129,16 @@ export default function Login() {
             <div className="grid gap-2 sm:grid-cols-2">
               <Link className="btn-secondary w-full" to="/preview">
                 <Icon name="eye" />
-                Preview app
+                Preview
               </Link>
               <Link className="btn-secondary w-full" to="/register">
-                Create account
+                Register
                 <Icon name="arrowRight" />
               </Link>
             </div>
+            <p className="mt-4 rounded-lg bg-slate-50 px-3 py-2 text-xs font-semibold leading-5 text-slate-500">
+              Registrasi terbaik menggunakan invite link dari admin instansi. Link umum hanya aktif untuk institusi yang membuka mode public registration.
+            </p>
           </form>
 
           <p className="mt-6 text-center text-xs font-medium text-slate-400">&copy; 2026 LabVentory Systems. All rights reserved.</p>

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import cls from 'classnames'
 import { api } from '../hooks/useApi'
@@ -8,9 +8,10 @@ import { Button, Field, Icon, SelectField } from '../components/ui'
 
 export default function Register() {
   const navigate = useNavigate()
-  const location = useLocation()
+  const [searchParams] = useSearchParams()
   const [labs, setLabs] = useState<Lab[]>([])
   const [institution, setInstitution] = useState<Institution | null>(null)
+  const [invite, setInvite] = useState<{ code: string; role: string; expiresAt: string; remainingUses: number } | null>(null)
   const [labsLoading, setLabsLoading] = useState(true)
   const [labsError, setLabsError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -26,21 +27,41 @@ export default function Register() {
 
   const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)
   const passwordMismatch = form.confirmPassword.length > 0 && form.password !== form.confirmPassword
-  const institutionSlug = new URLSearchParams(location.search).get('institution')
+  const institutionSlug = searchParams.get('institution')
     || import.meta.env.VITE_DEFAULT_INSTITUTION_SLUG
     || 'default'
+  const inviteCode = searchParams.get('invite') || ''
+  const inviteRequiresLab = !invite || ['student', 'admin', 'lab_admin'].includes(invite.role)
 
   useEffect(() => {
     setLabsLoading(true)
     setLabsError('')
-    api.get(`/public/institutions/${institutionSlug}/labs`)
+    setInvite(null)
+
+    const request = inviteCode
+      ? api.get(`/invitations/resolve/${inviteCode}`)
+      : api.get(`/public/institutions/${institutionSlug}/labs`)
+
+    request
       .then(r => {
         setInstitution(r.data.institution)
-        setLabs(r.data.labs || [])
+        setInvite(r.data.invitation || null)
+        const loadedLabs = r.data.labs || []
+        setLabs(loadedLabs)
+        const nextInvite = r.data.invitation || null
+        const requiresLab = !nextInvite || ['student', 'admin', 'lab_admin'].includes(nextInvite.role)
+        if (requiresLab && (r.data.lab?.id || loadedLabs.length === 1)) {
+          setForm(f => ({ ...f, labId: String(r.data.lab?.id || loadedLabs[0].id) }))
+        } else if (!requiresLab) {
+          setForm(f => ({ ...f, labId: '' }))
+        }
+        if (!inviteCode && r.data.institution?.registrationMode === 'invite') {
+          setLabsError('This institution requires an invitation link to register.')
+        }
       })
-      .catch(() => setLabsError('Unable to load laboratories for this institution. Please check the registration link.'))
+      .catch(() => setLabsError(inviteCode ? 'Invitation is invalid or expired.' : 'Unable to load laboratories for this institution. Please check the registration link.'))
       .finally(() => setLabsLoading(false))
-  }, [institutionSlug])
+  }, [institutionSlug, inviteCode])
 
   const set = (field: string, val: string) => setForm(f => ({ ...f, [field]: val }))
 
@@ -48,16 +69,18 @@ export default function Register() {
     e.preventDefault()
     if (!isEmailValid) return toast.error('Please enter a valid email address')
     if (form.password !== form.confirmPassword) return toast.error('Passwords do not match')
-    if (!form.labId) return toast.error('Please select a laboratory')
+    if (inviteRequiresLab && !form.labId) return toast.error('Please select a laboratory')
     setLoading(true)
     try {
-      await api.post('/auth/register', {
+      const payload: Record<string, unknown> = {
         name: form.name,
         email: form.email,
         password: form.password,
-        labId: Number(form.labId),
+        inviteCode: inviteCode || undefined,
         institutionSlug
-      })
+      }
+      if (inviteRequiresLab) payload.labId = Number(form.labId)
+      await api.post('/auth/register', payload)
       toast.success('Account created successfully! Please sign in.')
       navigate('/login')
     } catch (e: any) {
@@ -92,6 +115,20 @@ export default function Register() {
         </div>
 
         <div className="auth-card">
+          <div className="mb-6 rounded-lg border border-indigo-100 bg-indigo-50/60 p-4">
+            <div className="flex items-start gap-3">
+              <Icon name={invite ? 'key' : 'building'} className="mt-0.5 h-5 w-5 text-indigo-700" />
+              <div>
+                <p className="text-sm font-extrabold text-slate-950">{invite ? 'Invitation verified' : 'Institution registration'}</p>
+                <p className="mt-1 text-xs font-semibold leading-5 text-slate-600">
+                  {invite
+                    ? `Role: ${invite.role.replace(/_/g, ' ')}. Remaining uses: ${invite.remainingUses}.`
+                    : 'If your institution uses invite-only access, ask the admin for a registration link.'}
+                </p>
+              </div>
+            </div>
+          </div>
+
           <form onSubmit={onSubmit} className="space-y-6">
             <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
               <div className="md:col-span-2">
@@ -142,6 +179,7 @@ export default function Register() {
                 action={passwordAction(showConfirmPassword, () => setShowConfirmPassword(v => !v), showConfirmPassword ? 'Hide password' : 'Show password')}
               />
 
+              {inviteRequiresLab ? (
               <div className="md:col-span-2">
                 <SelectField
                   label="Department laboratory"
@@ -159,6 +197,17 @@ export default function Register() {
                 </SelectField>
                 {labsLoading && <p className="mt-2 text-xs font-medium text-slate-500">First load can take a moment while the hosted backend wakes up.</p>}
               </div>
+              ) : (
+                <div className="md:col-span-2 rounded-lg border border-emerald-100 bg-emerald-50/70 p-4">
+                  <div className="flex items-start gap-3">
+                    <Icon name="shield" className="mt-0.5 h-5 w-5 text-emerald-700" />
+                    <div>
+                      <p className="text-sm font-extrabold text-slate-900">Institution-level account</p>
+                      <p className="mt-1 text-xs font-semibold leading-5 text-slate-600">This invitation grants access across the institution, so no single laboratory assignment is required.</p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             <Button className="h-11 w-full" type="submit" disabled={loading || labsLoading || !!labsError}>

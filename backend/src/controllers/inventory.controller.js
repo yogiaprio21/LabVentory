@@ -1,13 +1,13 @@
 const { prisma } = require('../prisma/client')
 const { createInventory, updateInventory, ensureStockAvailable } = require('../services/inventory.service')
 const { logAudit } = require('../utils/audit')
-const { assertLabAccess, assertCategoryAccess, assertInventoryAccess, scopedInventoryWhere, isPlatformAdmin, isInstitutionAdmin, badRequest } = require('../utils/tenancy')
+const { assertActiveLabAccess, assertCategoryAccess, assertInventoryAccess, scopedInventoryWhere, isPlatformAdmin, isInstitutionAdmin, badRequest } = require('../utils/tenancy')
 
 const create = async (req, res) => {
   const { name, categoryId, labId, totalStock, availableStock, minStock, location, condition } = req.body
   const useLab = (!isPlatformAdmin(req.user) && !isInstitutionAdmin(req.user)) ? req.user.labId : labId
   if (!useLab) throw badRequest('labId is required')
-  await assertLabAccess(req.user, useLab)
+  await assertActiveLabAccess(req.user, useLab)
   await assertCategoryAccess(req.user, categoryId, useLab)
   const data = { name, categoryId, labId: Number(useLab), totalStock, availableStock, minStock: minStock || 0, location, condition }
   const item = await createInventory(data)

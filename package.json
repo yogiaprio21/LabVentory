@@ -1,0 +1,8 @@
+{
+  "name": "labventory",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "verify": "npm --prefix backend run verify && npm --prefix frontend run verify"
+  }
+}

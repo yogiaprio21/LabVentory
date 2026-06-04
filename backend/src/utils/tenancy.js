@@ -13,6 +13,9 @@ const canManageLabs = (user) => isPlatformAdmin(user) || isInstitutionAdmin(user
 const canManageInventory = (user) => isPlatformAdmin(user) || isInstitutionAdmin(user) || isLabAdmin(user)
 
 const tenantIdOf = (user) => user?.institutionId || user?.lab?.institutionId || null
+const roleRequiresLab = (role) => ['student', 'admin', 'lab_admin'].includes(role)
+const roleIsInstitutionScoped = (role) => role === 'institution_admin' || roleRequiresLab(role)
+const roleIsPlatformScoped = (role) => ['platform_admin', 'superadmin'].includes(role)
 
 const forbidden = () => {
   const e = new Error('Forbidden')
@@ -23,6 +26,12 @@ const forbidden = () => {
 const badRequest = (message) => {
   const e = new Error(message)
   e.status = 400
+  return e
+}
+
+const inactiveResource = (message = 'Resource is inactive') => {
+  const e = new Error(message)
+  e.status = 409
   return e
 }
 
@@ -83,6 +92,25 @@ const assertLabAccess = async (user, labId) => {
   return lab
 }
 
+const assertActiveLabAccess = async (user, labId) => {
+  const lab = await assertLabAccess(user, labId)
+  if (lab.status && lab.status !== 'active') throw inactiveResource('Laboratory is inactive')
+  return lab
+}
+
+const assertInstitutionAccess = async (user, institutionId) => {
+  if (!institutionId) throw badRequest('institutionId is required')
+  if (isPlatformAdmin(user)) {
+    const institution = await prisma.institution.findUnique({ where: { id: Number(institutionId) } })
+    if (!institution) throw forbidden()
+    return institution
+  }
+  if (Number(institutionId) !== Number(tenantIdOf(user))) throw forbidden()
+  const institution = await prisma.institution.findUnique({ where: { id: Number(institutionId) } })
+  if (!institution) throw forbidden()
+  return institution
+}
+
 const assertCategoryAccess = async (user, categoryId, expectedLabId) => {
   const extra = { id: Number(categoryId) }
   if (expectedLabId) extra.labId = Number(expectedLabId)
@@ -110,6 +138,24 @@ const assertBorrowingAccess = async (user, borrowingId) => {
   return borrowing
 }
 
+const assertInventoryAccessWithClient = async (client, user, inventoryId) => {
+  const inventory = await client.inventory.findFirst({
+    where: scopedInventoryWhere(user, { id: Number(inventoryId) }),
+    include: { lab: true, category: true }
+  })
+  if (!inventory) throw forbidden()
+  return inventory
+}
+
+const assertBorrowingAccessWithClient = async (client, user, borrowingId) => {
+  const borrowing = await client.borrowing.findFirst({
+    where: scopedBorrowingWhere(user, { id: Number(borrowingId) }),
+    include: { inventory: { include: { lab: true } }, user: true }
+  })
+  if (!borrowing) throw forbidden()
+  return borrowing
+}
+
 module.exports = {
   PLATFORM_ROLES,
   INSTITUTION_ADMIN_ROLES,
@@ -122,15 +168,23 @@ module.exports = {
   canManageLabs,
   canManageInventory,
   tenantIdOf,
+  roleRequiresLab,
+  roleIsInstitutionScoped,
+  roleIsPlatformScoped,
   scopedLabWhere,
   scopedUserWhere,
   scopedInventoryWhere,
   scopedCategoryWhere,
   scopedBorrowingWhere,
+  assertInstitutionAccess,
   assertLabAccess,
+  assertActiveLabAccess,
   assertCategoryAccess,
   assertInventoryAccess,
   assertBorrowingAccess,
+  assertInventoryAccessWithClient,
+  assertBorrowingAccessWithClient,
   forbidden,
-  badRequest
+  badRequest,
+  inactiveResource
 }

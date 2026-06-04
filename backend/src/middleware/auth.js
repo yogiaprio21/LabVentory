@@ -29,6 +29,11 @@ const authenticate = async (req, res, next) => {
       e.status = 401
       return next(e)
     }
+    if (user.status !== 'active' || (user.institution && user.institution.status !== 'active') || (user.lab && user.lab.status !== 'active')) {
+      const e = new Error('Account is inactive')
+      e.status = 403
+      return next(e)
+    }
     req.user = user
     req.tenantId = tenantIdOf(user)
     req.isPlatformAdmin = isPlatformAdmin(user)

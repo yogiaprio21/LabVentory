@@ -18,11 +18,12 @@ async function run() {
 
   const defaultInstitution = await prisma.institution.upsert({
     where: { slug: 'default' },
-    update: {},
+    update: { registrationMode: 'public' },
     create: {
       name: 'Default Institution',
       slug: 'default',
-      status: 'active'
+      status: 'active',
+      registrationMode: 'public'
     }
   })
 

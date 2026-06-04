@@ -41,9 +41,16 @@ const authLimiter = rateLimit({
     message: { error: 'Too many login attempts, please try again in 15 minutes.' }
 })
 
+const inviteResolveLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 30,
+    message: { error: 'Too many invitation checks, please try again later.' }
+})
+
 app.get('/health', (req, res) => res.json({ status: 'ok' }))
 
 app.use('/api/auth', authLimiter)
+app.use('/api/invitations/resolve', inviteResolveLimiter)
 app.use('/api', routes)
 app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec))
 

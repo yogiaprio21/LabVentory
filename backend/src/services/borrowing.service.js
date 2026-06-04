@@ -1,9 +1,12 @@
 const { prisma } = require('../prisma/client')
 const dayjs = require('dayjs')
+const { Prisma } = require('@prisma/client')
 const { borrowingLate, dueReminder, borrowingApproved, borrowingRejected, criticalStockAlert } = require('../utils/emailTemplates')
 const { sendMail } = require('../config/mailer')
+const { assertInventoryAccessWithClient, assertBorrowingAccessWithClient } = require('../utils/tenancy')
 
 const adminRecipientsWhere = (labId, institutionId) => ({
+  status: 'active',
   OR: [
     { role: { in: ['admin', 'lab_admin'] }, labId },
     { role: 'institution_admin', institutionId },
@@ -13,14 +16,31 @@ const adminRecipientsWhere = (labId, institutionId) => ({
 
 const withInstitution = (institutionId, data) => ({ institutionId: institutionId || null, ...data })
 
-const requestBorrow = async ({ userId, inventoryId, quantity, dueDate }) => {
-  const item = await prisma.inventory.findUnique({
-    where: { id: inventoryId },
-    include: { lab: { include: { institution: true } } }
-  })
+const createNotificationOnce = async (client, data) => {
+  try {
+    await client.notification.create({ data })
+    return true
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') return false
+    throw e
+  }
+}
+
+const requestBorrow = async ({ actor, userId, inventoryId, quantity, dueDate }) => {
+  const item = actor
+    ? await assertInventoryAccessWithClient(prisma, actor, inventoryId)
+    : await prisma.inventory.findUnique({
+      where: { id: inventoryId },
+      include: { lab: { include: { institution: true } } }
+    })
   if (!item) {
     const e = new Error('Inventory not found')
     e.status = 404
+    throw e
+  }
+  if (item.lab?.status && item.lab.status !== 'active') {
+    const e = new Error('Laboratory is inactive')
+    e.status = 409
     throw e
   }
   if (quantity <= 0) {
@@ -48,12 +68,14 @@ const requestBorrow = async ({ userId, inventoryId, quantity, dueDate }) => {
   return borrow
 }
 
-const approveBorrow = async (id) => {
+const approveBorrow = async (id, actor) => {
   return await prisma.$transaction(async (tx) => {
-    const b = await tx.borrowing.findUnique({
-      where: { id },
-      include: { inventory: { include: { lab: true } }, user: true }
-    })
+    const b = actor
+      ? await assertBorrowingAccessWithClient(tx, actor, id)
+      : await tx.borrowing.findUnique({
+        where: { id },
+        include: { inventory: { include: { lab: true } }, user: true }
+      })
     if (!b) {
       const e = new Error('Not Found')
       e.status = 404
@@ -70,8 +92,21 @@ const approveBorrow = async (id) => {
       throw e
     }
 
-    // Check for critical stock
-    const newStock = b.inventory.availableStock - b.quantity
+    const stockUpdate = await tx.inventory.updateMany({
+      where: { id: b.inventoryId, availableStock: { gte: b.quantity } },
+      data: { availableStock: { decrement: b.quantity } }
+    })
+    if (stockUpdate.count !== 1) {
+      const e = new Error('Insufficient stock')
+      e.status = 400
+      throw e
+    }
+
+    const currentInventory = await tx.inventory.findUnique({
+      where: { id: b.inventoryId },
+      include: { lab: true }
+    })
+    const newStock = currentInventory.availableStock
     if (newStock <= b.inventory.minStock) {
       const admins = await tx.user.findMany({ where: adminRecipientsWhere(b.inventory.labId, b.inventory.lab.institutionId) })
       if (admins.length) await tx.notification.createMany({
@@ -88,11 +123,6 @@ const approveBorrow = async (id) => {
         await sendMail({ to: admin.email, subject: t.subject, html: t.html }).catch(() => { })
       }
     }
-
-    await tx.inventory.update({
-      where: { id: b.inventoryId },
-      data: { availableStock: newStock }
-    })
 
     const updated = await tx.borrowing.update({ where: { id }, data: { status: 'approved', borrowDate: new Date() } })
 
@@ -113,8 +143,10 @@ const approveBorrow = async (id) => {
   })
 }
 
-const rejectBorrow = async (id) => {
-  const existing = await prisma.borrowing.findUnique({ where: { id } })
+const rejectBorrow = async (id, actor) => {
+  const existing = actor
+    ? await assertBorrowingAccessWithClient(prisma, actor, id)
+    : await prisma.borrowing.findUnique({ where: { id } })
   if (!existing) {
     const e = new Error('Not Found')
     e.status = 404
@@ -146,9 +178,11 @@ const rejectBorrow = async (id) => {
   return b
 }
 
-const returnBorrow = async (id) => {
+const returnBorrow = async (id, actor) => {
   return await prisma.$transaction(async (tx) => {
-    const b = await tx.borrowing.findUnique({ where: { id }, include: { inventory: { include: { lab: true } } } })
+    const b = actor
+      ? await assertBorrowingAccessWithClient(tx, actor, id)
+      : await tx.borrowing.findUnique({ where: { id }, include: { inventory: { include: { lab: true } } } })
     if (!b) {
       const e = new Error('Not Found')
       e.status = 404
@@ -178,21 +212,20 @@ const markLateAndDueReminders = async (sendMailFn) => {
   for (const b of lates) {
     // Check if we already alerted about this late borrowing today to avoid spamming
     const today = now.startOf('day').toDate()
-    const alreadyNotified = await prisma.notification.findFirst({
-      where: { userId: b.userId, title: 'Borrowing Overdue', createdAt: { gte: today } }
-    })
+    const dedupeKey = `borrowing:${b.id}:overdue:${dayjs(today).format('YYYY-MM-DD')}`
 
-    if (!alreadyNotified) {
-      await prisma.borrowing.update({ where: { id: b.id }, data: { status: 'late' } })
-
-      await prisma.notification.create({
-        data: withInstitution(b.inventory.lab.institutionId, {
+    await prisma.borrowing.update({ where: { id: b.id }, data: { status: 'late' } })
+    const created = await createNotificationOnce(
+      prisma,
+      withInstitution(b.inventory.lab.institutionId, {
           userId: b.userId,
+          dedupeKey,
           title: 'Borrowing Overdue',
           message: `Your borrowing of ${b.inventory.name} is now late! Please return it immediately.`
-        })
       })
+    )
 
+    if (created) {
       const t = borrowingLate(b.user, b.inventory)
       await mailer({ to: b.user.email, subject: t.subject, html: t.html }).catch(() => { })
     }
@@ -207,26 +240,28 @@ const markLateAndDueReminders = async (sendMailFn) => {
   })
   for (const b of dueSoon) {
     const today = now.startOf('day').toDate()
-    const alreadyReminded = await prisma.notification.findFirst({
-      where: { userId: b.userId, title: 'Upcoming Due Date', createdAt: { gte: today } }
-    })
+    const dedupeKey = `borrowing:${b.id}:due-soon:${dayjs(today).format('YYYY-MM-DD')}`
 
-    if (!alreadyReminded) {
-      await prisma.notification.create({
-        data: withInstitution(b.inventory.lab.institutionId, {
+    const created = await createNotificationOnce(
+      prisma,
+      withInstitution(b.inventory.lab.institutionId, {
           userId: b.userId,
+          dedupeKey,
           title: 'Upcoming Due Date',
           message: `Your borrowing of ${b.inventory.name} is due tomorrow (${dayjs(b.dueDate).format('DD MMM YYYY')}).`
-        })
       })
+    )
+    if (created) {
       const t = dueReminder(b.user, b.inventory)
       await mailer({ to: b.user.email, subject: t.subject, html: t.html }).catch(() => { })
     }
   }
 }
 
-const markDamaged = async (id) => {
-  const existing = await prisma.borrowing.findUnique({ where: { id } })
+const markDamaged = async (id, actor) => {
+  const existing = actor
+    ? await assertBorrowingAccessWithClient(prisma, actor, id)
+    : await prisma.borrowing.findUnique({ where: { id } })
   if (!existing) {
     const e = new Error('Not Found')
     e.status = 404
@@ -254,8 +289,10 @@ const markDamaged = async (id) => {
   return b
 }
 
-const markLost = async (id) => {
-  const existing = await prisma.borrowing.findUnique({ where: { id } })
+const markLost = async (id, actor) => {
+  const existing = actor
+    ? await assertBorrowingAccessWithClient(prisma, actor, id)
+    : await prisma.borrowing.findUnique({ where: { id } })
   if (!existing) {
     const e = new Error('Not Found')
     e.status = 404

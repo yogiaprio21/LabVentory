@@ -3,6 +3,8 @@ const bcrypt = require('bcryptjs')
 const { logAudit } = require('../utils/audit')
 const {
     assertLabAccess,
+    assertActiveLabAccess,
+    badRequest,
     forbidden,
     isPlatformAdmin,
     scopedUserWhere,
@@ -17,6 +19,7 @@ const publicUserSelect = {
     name: true,
     email: true,
     role: true,
+    status: true,
     institutionId: true,
     institution: { select: { id: true, name: true, slug: true, status: true } },
     labId: true,
@@ -84,7 +87,7 @@ const update = async (req, res) => {
     const id = Number(req.params.id)
     const existing = await findScopedUser(req, id)
 
-    const { name, email, role, institutionId, labId, password } = req.body
+    const { name, email, role, institutionId, labId, password, status } = req.body
     const nextRole = role || existing.role
     const actorIsPlatform = isPlatformAdmin(req.user)
     const actorTenantId = tenantIdOf(req.user)
@@ -119,7 +122,7 @@ const update = async (req, res) => {
     } else {
         if (LAB_USER_ROLES.includes(nextRole)) {
             const selectedLabId = labId !== undefined ? Number(labId) : existing.labId
-            const lab = await assertLabAccess(req.user, selectedLabId)
+            const lab = await assertActiveLabAccess(req.user, selectedLabId)
             targetInstitutionId = targetInstitutionId || lab.institutionId
             if (lab.institutionId !== targetInstitutionId) throw forbidden()
             data.labId = lab.id
@@ -136,6 +139,16 @@ const update = async (req, res) => {
     }
 
     if (password) data.password = await bcrypt.hash(password, 10)
+    if (status !== undefined) {
+        if (id === req.user.id && status !== 'active') throw badRequest('Cannot deactivate your own account')
+        if (status === 'inactive') {
+            const activeBorrowings = await prisma.borrowing.count({
+                where: { userId: id, status: { in: ['pending', 'approved', 'late'] } }
+            })
+            if (activeBorrowings > 0) throw badRequest('Resolve active borrowings before deactivating this user')
+        }
+        data.status = status
+    }
 
     const user = await prisma.user.update({
         where: { id },
@@ -157,8 +170,12 @@ const remove = async (req, res) => {
     if (!isPlatformAdmin(req.user) && PLATFORM_USER_ROLES.includes(existing.role)) {
         throw forbidden()
     }
-    await prisma.user.delete({ where: { id } })
-    await logAudit({ userId: req.user.id, institutionId: tenantIdOf(req.user), action: 'delete', entity: 'user', entityId: id })
+    const activeBorrowings = await prisma.borrowing.count({
+        where: { userId: id, status: { in: ['pending', 'approved', 'late'] } }
+    })
+    if (activeBorrowings > 0) throw badRequest('Resolve active borrowings before deactivating this user')
+    await prisma.user.update({ where: { id }, data: { status: 'inactive' } })
+    await logAudit({ userId: req.user.id, institutionId: tenantIdOf(req.user), action: 'deactivate', entity: 'user', entityId: id })
     res.status(204).send()
 }
 

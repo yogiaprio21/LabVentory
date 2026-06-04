@@ -23,4 +23,8 @@ if (env.NODE_ENV === 'production' && (!process.env.JWT_SECRET || env.JWT_SECRET 
   throw new Error('JWT_SECRET must be configured with a strong value in production')
 }
 
+if (env.NODE_ENV === 'production' && !process.env.CORS_ORIGINS && !process.env.FRONTEND_ORIGIN) {
+  throw new Error('CORS_ORIGINS or FRONTEND_ORIGIN must be configured in production')
+}
+
 module.exports = { env }

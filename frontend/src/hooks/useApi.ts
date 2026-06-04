@@ -22,7 +22,7 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (r) => r,
   (error) => {
-    if (error?.response?.status === 401) {
+    if (error?.response?.status === 401 || (error?.response?.status === 403 && error?.response?.data?.error === 'Account is inactive')) {
       localStorage.removeItem('token')
       localStorage.removeItem('user')
       const publicPages = ['/login', '/register', '/preview']

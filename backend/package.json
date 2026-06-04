@@ -9,7 +9,10 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
-    "seed": "node prisma/seed.js"
+    "seed": "node prisma/seed.js",
+    "audit:tenant": "node scripts/tenant-audit.js",
+    "check:syntax": "node scripts/syntax-check.js",
+    "verify": "prisma validate && prisma generate && npm run check:syntax && npm run audit:tenant"
   },
   "dependencies": {
     "@prisma/client": "^6.1.0",
