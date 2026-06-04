@@ -117,6 +117,11 @@ const inventory = {
             location: z.string().optional(),
             condition: z.string().optional()
         })
+    }),
+    resolveQr: z.object({
+        body: z.object({
+            code: z.string().min(1)
+        })
     })
 }
 

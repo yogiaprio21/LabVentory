@@ -7,6 +7,7 @@ const schemas = require('../utils/schemas')
 const router = Router()
 router.use(authenticate)
 
+router.post('/resolve-qr', requirePermission('inventory.view'), validate(schemas.inventory.resolveQr), (req, res, next) => ctrl.resolveQr(req, res).catch(next))
 router.post('/', requirePermission('inventory.create'), validate(schemas.inventory.upsert), (req, res, next) => ctrl.create(req, res).catch(next))
 router.put('/:id', requirePermission('inventory.update'), validate(schemas.common.idParam), validate(schemas.inventory.upsert), (req, res, next) => ctrl.update(req, res).catch(next))
 router.delete('/:id', requirePermission('inventory.delete'), validate(schemas.common.idParam), (req, res, next) => ctrl.remove(req, res).catch(next))

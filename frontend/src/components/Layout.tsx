@@ -15,17 +15,42 @@ type NavItem = {
   permission: Permission
 }
 
-const nav: NavItem[] = [
-  { to: '/superadmin/analytics', label: 'Analytics', description: 'Global platform metrics', icon: 'barChart', permission: 'platform.analytics.view' },
-  { to: '/dashboard', label: 'Dashboard', description: 'Activity overview', icon: 'home', permission: 'dashboard.view' },
-  { to: '/inventory', label: 'Inventory', description: 'Equipment and stock', icon: 'package', permission: 'inventory.view' },
-  { to: '/borrowings', label: 'Borrowings', description: 'Requests and returns', icon: 'bookOpen', permission: 'borrowing.view' },
-  { to: '/audit', label: 'Audit Logs', description: 'Security activity', icon: 'shield', permission: 'audit.view' },
-  { to: '/reports', label: 'Reports', description: 'PDF exports', icon: 'download', permission: 'report.view' },
-  { to: '/superadmin/institutions', label: 'Institutions', description: 'Tenant workspaces', icon: 'building', permission: 'institution.view' },
-  { to: '/superadmin/labs', label: 'Labs', description: 'Facilities', icon: 'building', permission: 'lab.view' },
-  { to: '/superadmin/users', label: 'Users', description: 'Accounts and roles', icon: 'users', permission: 'user.view' },
-  { to: '/superadmin/access-control', label: 'Access Control', description: 'Role permissions', icon: 'shield', permission: 'accessControl.view' }
+type NavSection = {
+  section: string
+  items: NavItem[]
+}
+
+const navSections: NavSection[] = [
+  {
+    section: 'Platform',
+    items: [
+      { to: '/superadmin/analytics', label: 'Analytics', description: 'Global platform metrics', icon: 'barChart', permission: 'platform.analytics.view' },
+      { to: '/superadmin/institutions', label: 'Institutions', description: 'Tenant workspaces', icon: 'building', permission: 'institution.view' }
+    ]
+  },
+  {
+    section: 'Operations',
+    items: [
+      { to: '/dashboard', label: 'Dashboard', description: 'Activity overview', icon: 'home', permission: 'dashboard.view' },
+      { to: '/inventory', label: 'Inventory', description: 'Equipment and stock', icon: 'package', permission: 'inventory.view' },
+      { to: '/borrowings', label: 'Borrowings', description: 'Requests and returns', icon: 'bookOpen', permission: 'borrowing.view' }
+    ]
+  },
+  {
+    section: 'Administration',
+    items: [
+      { to: '/superadmin/labs', label: 'Labs', description: 'Facilities', icon: 'building', permission: 'lab.view' },
+      { to: '/superadmin/users', label: 'Users', description: 'Accounts and roles', icon: 'users', permission: 'user.view' },
+      { to: '/reports', label: 'Reports', description: 'PDF exports', icon: 'download', permission: 'report.view' }
+    ]
+  },
+  {
+    section: 'Governance',
+    items: [
+      { to: '/audit', label: 'Audit Logs', description: 'Security activity', icon: 'shield', permission: 'audit.view' },
+      { to: '/superadmin/access-control', label: 'Access Control', description: 'Role permissions', icon: 'shield', permission: 'accessControl.view' }
+    ]
+  }
 ]
 
 function Brand() {
@@ -42,29 +67,34 @@ function Brand() {
   )
 }
 
-function NavList({ items, onNavigate }: { items: NavItem[]; onNavigate?: () => void }) {
+function NavList({ sections, onNavigate }: { sections: NavSection[]; onNavigate?: () => void }) {
   return (
-    <nav className="space-y-1">
-      {items.map(item => (
-        <NavLink
-          key={item.to}
-          to={item.to}
-          onClick={onNavigate}
-          className={({ isActive }) => cls(
-            'group flex min-h-12 items-center gap-3 rounded-lg px-3 py-2 text-sm font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40',
-            isActive ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-200' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-950'
-          )}
-        >
-          {({ isActive }) => (
-            <>
-              <Icon name={item.icon} className={cls('h-5 w-5', isActive ? 'text-white' : 'text-slate-400 group-hover:text-slate-700')} />
-              <span className="min-w-0">
-                <span className="block truncate">{item.label}</span>
-                <span className={cls('block truncate text-[11px] font-semibold', isActive ? 'text-indigo-100' : 'text-slate-400')}>{item.description}</span>
-              </span>
-            </>
-          )}
-        </NavLink>
+    <nav className="space-y-5">
+      {sections.map(section => (
+        <div key={section.section} className="space-y-1.5">
+          <div className="px-3 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">{section.section}</div>
+          {section.items.map(item => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              onClick={onNavigate}
+              className={({ isActive }) => cls(
+                'group flex min-h-12 items-center gap-3 rounded-lg px-3 py-2 text-sm font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40',
+                isActive ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-200' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-950'
+              )}
+            >
+              {({ isActive }) => (
+                <>
+                  <Icon name={item.icon} className={cls('h-5 w-5', isActive ? 'text-white' : 'text-slate-400 group-hover:text-slate-700')} />
+                  <span className="min-w-0">
+                    <span className="block truncate">{item.label}</span>
+                    <span className={cls('block truncate text-[11px] font-semibold', isActive ? 'text-indigo-100' : 'text-slate-400')}>{item.description}</span>
+                  </span>
+                </>
+              )}
+            </NavLink>
+          ))}
+        </div>
       ))}
     </nav>
   )
@@ -77,7 +107,13 @@ export default function Layout() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [confirmLogout, setConfirmLogout] = useState(false)
 
-  const filteredNav = useMemo(() => nav.filter(n => can(user, n.permission)), [user])
+  const filteredNavSections = useMemo(
+    () => navSections
+      .map(section => ({ ...section, items: section.items.filter(item => can(user, item.permission)) }))
+      .filter(section => section.items.length > 0),
+    [user]
+  )
+  const filteredNav = useMemo(() => filteredNavSections.flatMap(section => section.items), [filteredNavSections])
   const activePage = filteredNav.find(n => location.pathname === n.to) || filteredNav.find(n => location.pathname.startsWith(n.to))
 
   const handleLogout = () => {
@@ -99,7 +135,7 @@ export default function Layout() {
           </div>
         </div>
         <div className="flex-1 overflow-y-auto p-4">
-          <NavList items={filteredNav} />
+          <NavList sections={filteredNavSections} />
         </div>
         <div className="border-t border-slate-100 p-4">
           <button
@@ -153,7 +189,7 @@ export default function Layout() {
                 </button>
               </div>
               <div className="flex-1 overflow-y-auto p-4">
-                <NavList items={filteredNav} onNavigate={() => setIsMobileMenuOpen(false)} />
+                <NavList sections={filteredNavSections} onNavigate={() => setIsMobileMenuOpen(false)} />
               </div>
               <div className="border-t border-slate-100 p-4">
                 <button

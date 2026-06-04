@@ -28,6 +28,7 @@ type IconName =
   | 'menu'
   | 'package'
   | 'plus'
+  | 'printer'
   | 'qr'
   | 'refresh'
   | 'search'
@@ -64,6 +65,7 @@ const paths: Record<IconName, React.ReactNode> = {
   menu: <><path d="M4 6h16" /><path d="M4 12h16" /><path d="M4 18h16" /></>,
   package: <><path d="m21 8-9-5-9 5 9 5 9-5Z" /><path d="M3 8v8l9 5 9-5V8" /><path d="M12 13v8" /></>,
   plus: <><path d="M12 5v14" /><path d="M5 12h14" /></>,
+  printer: <><path d="M6 9V2h12v7" /><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" /><path d="M6 14h12v8H6Z" /></>,
   qr: <><path d="M4 4h6v6H4Z" /><path d="M14 4h6v6h-6Z" /><path d="M4 14h6v6H4Z" /><path d="M14 14h2" /><path d="M20 14v2" /><path d="M16 18h4" /><path d="M18 16v4" /></>,
   refresh: <><path d="M21 12a9 9 0 0 1-15 6.7L3 16" /><path d="M3 21v-5h5" /><path d="M3 12a9 9 0 0 1 15-6.7L21 8" /><path d="M21 3v5h-5" /></>,
   search: <><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></>,

@@ -26,6 +26,21 @@ const createNotificationOnce = async (client, data) => {
   }
 }
 
+const notifyUsersOnce = async (client, users, institutionId, buildNotification) => {
+  let created = 0
+  for (const user of users) {
+    const ok = await createNotificationOnce(
+      client,
+      withInstitution(institutionId, {
+        userId: user.id,
+        ...buildNotification(user)
+      })
+    )
+    if (ok) created += 1
+  }
+  return created
+}
+
 const requestBorrow = async ({ actor, userId, inventoryId, quantity, dueDate }) => {
   const item = actor
     ? await assertInventoryAccessWithClient(prisma, actor, inventoryId)
@@ -109,13 +124,11 @@ const approveBorrow = async (id, actor) => {
     const newStock = currentInventory.availableStock
     if (newStock <= b.inventory.minStock) {
       const admins = await tx.user.findMany({ where: adminRecipientsWhere(b.inventory.labId, b.inventory.lab.institutionId) })
-      if (admins.length) await tx.notification.createMany({
-        data: admins.map(admin => withInstitution(b.inventory.lab.institutionId, {
-          userId: admin.id,
-          title: 'Critical Stock Alert',
-          message: `Stock for ${b.inventory.name} is low (${newStock} units left).`
-        }))
-      })
+      if (admins.length) await notifyUsersOnce(tx, admins, b.inventory.lab.institutionId, () => ({
+        dedupeKey: `inventory:${b.inventoryId}:low-stock:${newStock}`,
+        title: 'Critical Stock Alert',
+        message: `Stock for ${b.inventory.name} is low (${newStock} units left).`
+      }))
 
       // Send email alerts for stock
       for (const admin of admins) {
@@ -182,7 +195,7 @@ const returnBorrow = async (id, actor) => {
   return await prisma.$transaction(async (tx) => {
     const b = actor
       ? await assertBorrowingAccessWithClient(tx, actor, id)
-      : await tx.borrowing.findUnique({ where: { id }, include: { inventory: { include: { lab: true } } } })
+      : await tx.borrowing.findUnique({ where: { id }, include: { inventory: { include: { lab: true } }, user: true } })
     if (!b) {
       const e = new Error('Not Found')
       e.status = 404
@@ -198,6 +211,15 @@ const returnBorrow = async (id, actor) => {
       data: { availableStock: b.inventory.availableStock + b.quantity }
     })
     const updated = await tx.borrowing.update({ where: { id }, data: { status: 'returned', returnDate: new Date() } })
+    await createNotificationOnce(
+      tx,
+      withInstitution(b.inventory.lab.institutionId, {
+        userId: b.userId,
+        dedupeKey: `borrowing:${b.id}:returned`,
+        title: 'Borrowing Returned',
+        message: `Your borrowing of ${b.inventory.name} has been returned.`
+      })
+    )
     return updated
   })
 }

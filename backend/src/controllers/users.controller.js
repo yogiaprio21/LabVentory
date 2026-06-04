@@ -1,6 +1,7 @@
 const { prisma } = require('../prisma/client')
 const bcrypt = require('bcryptjs')
 const { logAudit } = require('../utils/audit')
+const { auditDetails, buildChanges } = require('../utils/audit-details')
 const {
     assertLabAccess,
     assertActiveLabAccess,
@@ -164,7 +165,29 @@ const update = async (req, res) => {
         data,
         select: publicUserSelect
     })
-    await logAudit({ userId: req.user.id, institutionId: data.institutionId !== undefined ? data.institutionId : tenantIdOf(req.user), action: 'update', entity: 'user', entityId: id, details: { role: data.role, status: data.status } })
+    await logAudit({
+        userId: req.user.id,
+        institutionId: data.institutionId !== undefined ? data.institutionId : tenantIdOf(req.user),
+        action: 'update',
+        entity: 'user',
+        entityId: id,
+        details: auditDetails({
+            summary: `Updated user "${existing.name}"`,
+            changes: buildChanges(
+                existing,
+                {
+                    name: data.name,
+                    email: data.email,
+                    role: data.role,
+                    status: data.status,
+                    institutionId: data.institutionId,
+                    labId: data.labId
+                },
+                ['name', 'email', 'role', 'status', 'institutionId', 'labId']
+            ),
+            metadata: password ? { passwordUpdated: true } : undefined
+        })
+    })
     res.json(user)
 }
 

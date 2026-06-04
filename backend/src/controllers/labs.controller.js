@@ -1,5 +1,6 @@
 const { prisma } = require('../prisma/client')
 const { logAudit } = require('../utils/audit')
+const { auditDetails, buildChanges } = require('../utils/audit-details')
 const { isPlatformAdmin, tenantIdOf, scopedLabWhere, assertLabAccess, assertInstitutionAccess, badRequest } = require('../utils/tenancy')
 
 const createLab = async (req, res) => {
@@ -9,7 +10,21 @@ const createLab = async (req, res) => {
   const institution = await assertInstitutionAccess(req.user, targetInstitutionId)
   if (institution.status !== 'active') throw badRequest('Cannot create a laboratory for an inactive institution')
   const lab = await prisma.lab.create({ data: { name, location, institutionId: targetInstitutionId } })
-  await logAudit({ userId: req.user.id, institutionId: targetInstitutionId, action: 'create', entity: 'lab', entityId: lab.id, details: { name, location } })
+  await logAudit({
+    userId: req.user.id,
+    institutionId: targetInstitutionId,
+    action: 'create',
+    entity: 'lab',
+    entityId: lab.id,
+    details: auditDetails({
+      summary: `Created lab "${lab.name}"`,
+      attributes: [
+        { label: 'Lab name', value: lab.name },
+        { label: 'Location', value: lab.location },
+        { label: 'Institution ID', value: lab.institutionId }
+      ]
+    })
+  })
   res.status(201).json(lab)
 }
 
@@ -63,7 +78,19 @@ const updateLab = async (req, res) => {
     action: nextInstitutionId !== existing.institutionId ? 'transfer' : 'update',
     entity: 'lab',
     entityId: id,
-    details: { name, location, status, previousInstitutionId: existing.institutionId, institutionId: nextInstitutionId }
+    details: auditDetails({
+      summary: nextInstitutionId !== existing.institutionId
+        ? `Transferred lab "${existing.name}" to institution #${nextInstitutionId}`
+        : `Updated lab "${existing.name}"`,
+      changes: buildChanges(
+        existing,
+        { name, location, status, institutionId: nextInstitutionId },
+        ['name', 'location', 'status', 'institutionId']
+      ),
+      metadata: nextInstitutionId !== existing.institutionId
+        ? { previousInstitutionId: existing.institutionId, institutionId: nextInstitutionId }
+        : undefined
+    })
   })
   res.json(lab)
 }

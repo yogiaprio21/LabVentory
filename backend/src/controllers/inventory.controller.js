@@ -1,7 +1,13 @@
 const { prisma } = require('../prisma/client')
 const { createInventory, updateInventory, ensureStockAvailable } = require('../services/inventory.service')
 const { logAudit } = require('../utils/audit')
+const { auditDetails, buildChanges } = require('../utils/audit-details')
 const { assertActiveLabAccess, assertCategoryAccess, assertInventoryAccess, scopedInventoryWhere, isPlatformAdmin, isInstitutionAdmin, badRequest } = require('../utils/tenancy')
+
+const parseInventoryQrCode = (code) => {
+  const match = String(code || '').trim().match(/^inventory:(\d+)$/)
+  return match ? Number(match[1]) : null
+}
 
 const create = async (req, res) => {
   const { name, categoryId, labId, totalStock, availableStock, minStock, location, condition } = req.body
@@ -11,7 +17,25 @@ const create = async (req, res) => {
   await assertCategoryAccess(req.user, categoryId, useLab)
   const data = { name, categoryId, labId: Number(useLab), totalStock, availableStock, minStock: minStock || 0, location, condition }
   const item = await createInventory(data)
-  await logAudit({ userId: req.user.id, action: 'create', entity: 'inventory', entityId: item.id, details: data })
+  await logAudit({
+    userId: req.user.id,
+    action: 'create',
+    entity: 'inventory',
+    entityId: item.id,
+    details: auditDetails({
+      summary: `Created inventory item "${item.name}"`,
+      attributes: [
+        { label: 'Item name', value: item.name },
+        { label: 'Lab ID', value: item.labId },
+        { label: 'Category ID', value: item.categoryId },
+        { label: 'Total stock', value: item.totalStock },
+        { label: 'Available stock', value: item.availableStock },
+        { label: 'Minimum stock', value: item.minStock },
+        { label: 'Location', value: item.location },
+        { label: 'Condition', value: item.condition }
+      ]
+    })
+  })
   res.status(201).json(item)
 }
 
@@ -32,12 +56,16 @@ const update = async (req, res) => {
   const { name, categoryId, totalStock, availableStock, minStock, location, condition } = req.body
   await assertCategoryAccess(req.user, categoryId, existing.labId)
 
-  // Track changes for audit
-  const changes = {}
-  if (name !== undefined && name !== existing.name) changes.name = { old: existing.name, new: name }
-  if (totalStock !== undefined && totalStock !== existing.totalStock) changes.totalStock = { old: existing.totalStock, new: totalStock }
-  if (availableStock !== undefined && availableStock !== existing.availableStock) changes.availableStock = { old: existing.availableStock, new: availableStock }
-  if (minStock !== undefined && minStock !== existing.minStock) changes.minStock = { old: existing.minStock, new: minStock }
+  const proposed = {
+    name,
+    categoryId,
+    totalStock,
+    availableStock,
+    minStock,
+    location,
+    condition
+  }
+  const changes = buildChanges(existing, proposed, ['name', 'categoryId', 'totalStock', 'availableStock', 'minStock', 'location', 'condition'])
 
   const item = await updateInventory(id, { name, categoryId, totalStock, availableStock, minStock, location, condition })
   await logAudit({
@@ -45,7 +73,10 @@ const update = async (req, res) => {
     action: 'update',
     entity: 'inventory',
     entityId: id,
-    details: Object.keys(changes).length ? changes : { message: 'Fields updated (location/condition/cat)' }
+    details: auditDetails({
+      summary: changes.length ? `Updated ${changes.length} field${changes.length === 1 ? '' : 's'} on "${existing.name}"` : `Updated "${existing.name}"`,
+      changes
+    })
   })
   res.json(item)
 }
@@ -73,6 +104,27 @@ const get = async (req, res) => {
   const id = Number(req.params.id)
   const existing = await assertInventoryAccess(req.user, id)
   res.json(existing)
+}
+
+const resolveQr = async (req, res) => {
+  const inventoryId = parseInventoryQrCode(req.body.code)
+  if (!inventoryId) throw badRequest('Invalid inventory QR code')
+
+  const item = await assertInventoryAccess(req.user, inventoryId)
+  res.json({
+    id: item.id,
+    name: item.name,
+    categoryId: item.categoryId,
+    labId: item.labId,
+    totalStock: item.totalStock,
+    availableStock: item.availableStock,
+    minStock: item.minStock,
+    location: item.location,
+    condition: item.condition,
+    qrCodeUrl: item.qrCodeUrl,
+    lab: item.lab,
+    category: item.category
+  })
 }
 
 const list = async (req, res) => {
@@ -109,4 +161,4 @@ const list = async (req, res) => {
   })
 }
 
-module.exports = { create, update, remove, get, list }
+module.exports = { create, update, remove, get, resolveQr, list }

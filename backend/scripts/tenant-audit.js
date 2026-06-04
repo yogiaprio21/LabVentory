@@ -54,6 +54,16 @@ const checks = [
     label: 'Borrowing stock updates and reminders use atomic and deduped operations'
   },
   {
+    file: 'backend/src/controllers/analytics.controller.js',
+    mustContain: ['tenantDistribution', 'topLabs', 'dailyTrends', 'COALESCE(inv."totalStock"'],
+    label: 'Platform analytics has a dedicated cross-tenant aggregation endpoint'
+  },
+  {
+    file: 'backend/src/controllers/inventory.controller.js',
+    mustContain: ['parseInventoryQrCode', '^inventory:(\\d+)$', 'assertInventoryAccess(req.user, inventoryId)'],
+    label: 'Inventory QR resolver validates payload format and tenant access'
+  },
+  {
     file: 'backend/src/config/env.js',
     mustContain: ['CORS_ORIGINS or FRONTEND_ORIGIN must be configured in production'],
     label: 'Production CORS configuration fails fast when origin allowlist is missing'
@@ -105,8 +115,48 @@ const checks = [
   },
   {
     file: 'frontend/src/components/Layout.tsx',
-    mustContain: ['/superadmin/institutions', 'Tenant workspaces'],
-    label: 'Navigation exposes dedicated institution management'
+    mustContain: ['/superadmin/institutions', 'Tenant workspaces', "section: 'Platform'", "section: 'Operations'", "section: 'Governance'"],
+    label: 'Navigation exposes dedicated institution management and grouped functional sections'
+  },
+  {
+    file: 'frontend/src/pages/Superadmin/Analytics.tsx',
+    mustContain: ['Platform Analytics', '/analytics/summary', 'tenantDistribution', 'topLabs'],
+    label: 'Superadmin analytics uses the dedicated platform analytics endpoint and UI'
+  },
+  {
+    file: 'frontend/src/pages/Admin/Dashboard.tsx',
+    mustContain: ['Operations Dashboard', '/dashboard/summary', 'fillLastSevenDays', 'No borrowing activity'],
+    label: 'Dashboard is scoped operational summary with chart empty states'
+  },
+  {
+    file: 'frontend/src/components/NotificationBell.tsx',
+    mustContain: ['createPortal', 'unreadOnly', 'visibleCount', 'Load more'],
+    label: 'Notification popover renders in a controlled portal with filters'
+  },
+  {
+    file: 'frontend/src/pages/Inventory/InventoryPage.tsx',
+    mustContain: ['selectedQrItem', 'Download QR', 'Print', 'Payload: inventory:'],
+    label: 'Inventory QR codes open in a usable preview modal'
+  },
+  {
+    file: 'frontend/src/pages/Borrowings/BorrowingsPage.tsx',
+    mustContain: ['INVENTORY_QR_PATTERN', '^inventory:(\\d+)$', '/inventory/resolve-qr'],
+    label: 'Borrowing QR scanner strictly resolves inventory QR codes through backend scope checks'
+  },
+  {
+    file: 'backend/src/utils/audit-details.js',
+    mustContain: ['auditDetails', 'buildChanges', 'changes:', 'attributes:'],
+    label: 'Backend audit details are structured into summaries, attributes, and changes'
+  },
+  {
+    file: 'frontend/src/utils/auditDetails.ts',
+    mustContain: ['formatAuditDetails', 'labelForAuditField', 'oldValue', 'newValue'],
+    label: 'Frontend audit detail formatter supports readable labels and before/after changes'
+  },
+  {
+    file: 'frontend/src/pages/Audit/AuditPage.tsx',
+    mustContain: ['AuditDetailSummary', 'AuditDetailModal', 'Copy JSON', 'View details'],
+    label: 'Audit page renders readable details with a detail modal and raw JSON escape hatch'
   },
   {
     file: 'frontend/src/pages/Register.tsx',

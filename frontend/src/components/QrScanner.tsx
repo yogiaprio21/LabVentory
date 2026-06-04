@@ -3,12 +3,13 @@ import { Html5QrcodeScanner } from 'html5-qrcode';
 import { Button, Icon } from './ui';
 
 interface QrScannerProps {
-    onScan: (decodedText: string) => void;
+    onScan: (decodedText: string) => void | boolean | Promise<void | boolean>;
     onClose: () => void;
 }
 
 export default function QrScanner({ onScan, onClose }: QrScannerProps) {
     const scannerRef = useRef<Html5QrcodeScanner | null>(null);
+    const resolvingRef = useRef(false);
 
     useEffect(() => {
         scannerRef.current = new Html5QrcodeScanner(
@@ -18,10 +19,17 @@ export default function QrScanner({ onScan, onClose }: QrScannerProps) {
         );
 
         scannerRef.current.render(
-            (decodedText) => {
-                onScan(decodedText);
-                if (scannerRef.current) {
-                    scannerRef.current.clear().then(onClose);
+            async (decodedText) => {
+                if (resolvingRef.current) return;
+                resolvingRef.current = true;
+                try {
+                    const result = await onScan(decodedText);
+                    if (result !== false && scannerRef.current) {
+                        await scannerRef.current.clear();
+                        onClose();
+                    }
+                } finally {
+                    resolvingRef.current = false;
                 }
             },
             (error) => {

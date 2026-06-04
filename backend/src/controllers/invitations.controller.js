@@ -1,6 +1,7 @@
 const dayjs = require('dayjs')
 const { prisma } = require('../prisma/client')
 const { logAudit } = require('../utils/audit')
+const { auditDetails, buildChanges } = require('../utils/audit-details')
 const { createInviteCode, isInviteUsable } = require('../utils/invite')
 const {
   assertInstitutionAccess,
@@ -90,7 +91,17 @@ const create = async (req, res) => {
     action: 'create',
     entity: 'invitation',
     entityId: invite.id,
-    details: { role, labId: lab?.id || null, inviteeEmail: invite.inviteeEmail, maxUses: invite.maxUses, expiresAt: invite.expiresAt }
+    details: auditDetails({
+      summary: `Created ${role} invitation`,
+      attributes: [
+        { label: 'Role', value: role },
+        { label: 'Institution ID', value: institution.id },
+        { label: 'Lab ID', value: lab?.id || null },
+        { label: 'Invitee email', value: invite.inviteeEmail },
+        { label: 'Maximum uses', value: invite.maxUses },
+        { label: 'Expires at', value: invite.expiresAt }
+      ]
+    })
   })
   res.status(201).json(invite)
 }
@@ -118,7 +129,10 @@ const update = async (req, res) => {
     action: 'update',
     entity: 'invitation',
     entityId: id,
-    details: data
+    details: auditDetails({
+      summary: `Updated invitation #${id}`,
+      changes: buildChanges(existing, data, ['status', 'expiresAt'])
+    })
   })
   res.json(invite)
 }

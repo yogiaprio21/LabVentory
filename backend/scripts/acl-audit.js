@@ -47,6 +47,20 @@ for (const [label, token] of expectedRoutePermissions) {
 const layout = read('frontend/src/components/Layout.tsx')
 if (layout.includes('roles:')) fail('Frontend navigation', 'Layout still contains role-based navigation entries')
 if (!layout.includes('/superadmin/access-control')) fail('Frontend navigation', 'Access Control page is not linked in navigation')
+if (!layout.includes("section: 'Platform'") || !layout.includes("section: 'Operations'")) {
+  fail('Frontend navigation', 'Layout navigation is not grouped by functional section')
+}
+
+const analyticsPage = read('frontend/src/pages/Superadmin/Analytics.tsx')
+if (analyticsPage.includes("import Dashboard from '../Admin/Dashboard'")) {
+  fail('Frontend analytics', 'Superadmin Analytics still aliases Admin Dashboard')
+}
+if (!analyticsPage.includes('/analytics/summary')) fail('Frontend analytics', 'Superadmin Analytics does not call /analytics/summary')
+
+const auditPage = read('frontend/src/pages/Audit/AuditPage.tsx')
+if (auditPage.includes('JSON.stringify')) fail('Frontend audit details', 'AuditPage renders raw JSON directly instead of using formatter')
+if (!auditPage.includes('formatAuditDetails')) fail('Frontend audit details', 'AuditPage does not use the audit detail formatter')
+if (!auditPage.includes('Copy JSON')) fail('Frontend audit details', 'AuditPage is missing a raw JSON copy option for admins')
 
 const sensitiveUiChecks = [
   ['frontend/src/pages/Inventory/InventoryPage.tsx', ['inventory.create', 'inventory.update', 'inventory.delete', 'report.export']],
@@ -68,6 +82,8 @@ for (const role of ['platform_admin', 'institution_admin', 'lab_admin', 'admin',
   if (!openApi.includes(role)) fail('OpenAPI roles', `missing ${role}`)
 }
 if (!openApi.includes('/acl/matrix')) fail('OpenAPI ACL endpoint', 'missing /acl/matrix')
+if (!openApi.includes('/analytics/summary')) fail('OpenAPI analytics endpoint', 'missing /analytics/summary')
+if (!openApi.includes('/inventory/resolve-qr')) fail('OpenAPI QR endpoint', 'missing /inventory/resolve-qr')
 
 if (failures.length) {
   console.error('ACL audit failed:')

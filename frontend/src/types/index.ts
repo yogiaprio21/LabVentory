@@ -55,7 +55,7 @@ export type Borrowing = {
 
 export type AuditLog = {
   id: number
-  userId: number
+  userId: number | null
   action: string
   entity: string
   entityId: number

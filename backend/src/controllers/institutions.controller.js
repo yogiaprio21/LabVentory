@@ -2,6 +2,7 @@ const { prisma } = require('../prisma/client')
 const bcrypt = require('bcryptjs')
 const { Prisma } = require('@prisma/client')
 const { logAudit } = require('../utils/audit')
+const { auditDetails, buildChanges } = require('../utils/audit-details')
 
 const slugify = (value) => value
   .toLowerCase()
@@ -93,7 +94,16 @@ const create = async (req, res) => {
     action: 'create',
     entity: 'institution',
     entityId: result.institution.id,
-    details: { adminUserId: result.adminUser?.id || null, registrationMode }
+    details: auditDetails({
+      summary: `Created institution "${result.institution.name}"`,
+      attributes: [
+        { label: 'Institution name', value: result.institution.name },
+        { label: 'Slug', value: result.institution.slug },
+        { label: 'Status', value: result.institution.status },
+        { label: 'Registration mode', value: result.institution.registrationMode },
+        { label: 'First admin user ID', value: result.adminUser?.id || null }
+      ]
+    })
   })
   res.status(201).json(result)
 }
@@ -102,6 +112,12 @@ const update = async (req, res) => {
   const id = Number(req.params.id)
   const { name, slug, status, domain, registrationMode } = req.body
   const useSlug = slug !== undefined ? normalizeSlug(slug) : undefined
+  const existing = await prisma.institution.findUnique({ where: { id } }).catch(handlePrismaWriteError)
+  if (!existing) {
+    const e = new Error('Institution not found')
+    e.status = 404
+    throw e
+  }
   if (slug !== undefined) {
     const taken = await prisma.institution.findUnique({ where: { slug: useSlug } })
     if (taken && taken.id !== id) {
@@ -121,7 +137,21 @@ const update = async (req, res) => {
       }
     })
     .catch(handlePrismaWriteError)
-  await logAudit({ userId: req.user.id, institutionId: id, action: 'update', entity: 'institution', entityId: id, details: { name, slug, status, domain, registrationMode } })
+  await logAudit({
+    userId: req.user.id,
+    institutionId: id,
+    action: 'update',
+    entity: 'institution',
+    entityId: id,
+    details: auditDetails({
+      summary: `Updated institution "${existing.name}"`,
+      changes: buildChanges(
+        existing,
+        { name, slug: useSlug, status, domain: domain !== undefined ? normalizeDomain(domain) : undefined, registrationMode },
+        ['name', 'slug', 'status', 'domain', 'registrationMode']
+      )
+    })
+  })
   res.json(institution)
 }
 

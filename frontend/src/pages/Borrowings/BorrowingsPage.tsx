@@ -8,6 +8,7 @@ import { Button, ConfirmDialog, EmptyState, Field, Icon, PageHeader, Pagination,
 import { can } from '../../config/accessControl'
 
 const QrScanner = lazy(() => import('../../components/QrScanner'))
+const INVENTORY_QR_PATTERN = /^inventory:(\d+)$/
 
 type ActionState = {
   id: number
@@ -78,13 +79,23 @@ export default function BorrowingsPage() {
     }
   }
 
-  const handleQrScan = (text: string) => {
-    const match = text.match(/(\d+)/)
-    if (match) {
-      setInventoryId(parseInt(match[0]))
-      toast.success('QR code scanned: item selected')
-    } else {
-      toast.error('Invalid QR code format')
+  const handleQrScan = async (text: string) => {
+    const code = text.trim()
+    const match = code.match(INVENTORY_QR_PATTERN)
+    if (!match) {
+      toast.error('Invalid QR code. Use a LabVentory inventory QR.')
+      return false
+    }
+    try {
+      const res = await api.post('/inventory/resolve-qr', { code })
+      const item: Inventory = res.data
+      setInventory(prev => prev.some(existing => existing.id === item.id) ? prev : [...prev, item])
+      setInventoryId(item.id)
+      toast.success(`QR scanned: ${item.name} selected`)
+      return true
+    } catch (e: any) {
+      toast.error(e?.response?.data?.error || 'This QR code cannot be used in your scope')
+      return false
     }
   }
 

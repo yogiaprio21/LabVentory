@@ -9,6 +9,13 @@ import { Button, ConfirmDialog, EmptyState, Field, Icon, PageHeader, Pagination,
 import { can } from '../../config/accessControl'
 
 type ConfirmState = { id: number; name: string } | null
+const escapeHtml = (value: string) => value.replace(/[&<>"']/g, char => ({
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#39;'
+}[char] || char))
 
 export default function InventoryPage() {
   const [items, setItems] = useState<Inventory[]>([])
@@ -26,6 +33,7 @@ export default function InventoryPage() {
   const [savingCat, setSavingCat] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState<ConfirmState>(null)
   const [deleting, setDeleting] = useState(false)
+  const [selectedQrItem, setSelectedQrItem] = useState<Inventory | null>(null)
   const { user } = useAuth()
   const canCreateInventory = can(user, 'inventory.create')
   const canUpdateInventory = can(user, 'inventory.update')
@@ -134,6 +142,48 @@ export default function InventoryPage() {
     }
   }
 
+  const downloadQr = (item: Inventory) => {
+    if (!item.qrCodeUrl) return
+    const link = document.createElement('a')
+    link.href = item.qrCodeUrl
+    link.download = `${item.name.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-qr.png`
+    link.click()
+  }
+
+  const printQr = (item: Inventory) => {
+    if (!item.qrCodeUrl) return
+    const popup = window.open('', '_blank', 'width=420,height=560')
+    if (!popup) {
+      toast.error('Allow popups to print this QR code')
+      return
+    }
+    const safeName = escapeHtml(item.name)
+    const safeLocation = escapeHtml(item.location || 'No location set')
+    popup.document.write(`
+      <html>
+        <head>
+          <title>${safeName} QR</title>
+          <style>
+            body { font-family: Arial, sans-serif; display: grid; place-items: center; min-height: 100vh; margin: 0; color: #0f172a; }
+            .card { text-align: center; padding: 24px; }
+            img { width: 280px; height: 280px; object-fit: contain; border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px; }
+            h1 { font-size: 20px; margin: 18px 0 6px; }
+            p { margin: 0; color: #475569; font-size: 13px; }
+          </style>
+        </head>
+        <body>
+          <div class="card">
+            <img src="${item.qrCodeUrl}" alt="${safeName} QR code" />
+            <h1>${safeName}</h1>
+            <p>${safeLocation} - Inventory ID ${item.id}</p>
+          </div>
+          <script>window.onload = () => { window.print(); window.close(); };</script>
+        </body>
+      </html>
+    `)
+    popup.document.close()
+  }
+
   const openModal = () => {
     setForm({})
     setNewCatName('')
@@ -206,7 +256,16 @@ export default function InventoryPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      {item.qrCodeUrl ? <img src={item.qrCodeUrl} alt={`${item.name} QR code`} className="h-10 w-10 rounded-lg border border-slate-200 bg-white p-1" /> : <span className="text-xs text-slate-400">No QR</span>}
+                      {item.qrCodeUrl ? (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedQrItem(item)}
+                          className="rounded-lg border border-slate-200 bg-white p-1 transition hover:border-indigo-300 hover:ring-2 hover:ring-indigo-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40"
+                          aria-label={`Open QR code for ${item.name}`}
+                        >
+                          <img src={item.qrCodeUrl} alt={`${item.name} QR code`} className="h-10 w-10 rounded-md" />
+                        </button>
+                      ) : <span className="text-xs text-slate-400">No QR</span>}
                     </td>
                     {canManageInventoryActions && (
                       <td className="px-6 py-4">
@@ -240,6 +299,16 @@ export default function InventoryPage() {
               <div className="mt-4 flex flex-wrap items-center gap-2">
                 <StatusBadge tone="indigo">{categoryName(item.categoryId)}</StatusBadge>
                 {item.availableStock <= item.minStock && <StatusBadge tone="rose">Low stock</StatusBadge>}
+                {item.qrCodeUrl && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedQrItem(item)}
+                    className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700"
+                  >
+                    <Icon name="qr" />
+                    QR Code
+                  </button>
+                )}
               </div>
               {canManageInventoryActions && (
                 <div className="mt-4 grid grid-cols-2 gap-2">
@@ -306,6 +375,28 @@ export default function InventoryPage() {
             <Button onClick={submit}>Save Changes</Button>
           </div>
         </div>
+      </Modal>
+
+      <Modal open={!!selectedQrItem} title="Inventory QR Code" onClose={() => setSelectedQrItem(null)}>
+        {selectedQrItem && (
+          <div className="space-y-5">
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-center">
+              <img
+                src={selectedQrItem.qrCodeUrl}
+                alt={`${selectedQrItem.name} QR code`}
+                className="mx-auto h-72 w-72 max-w-full rounded-lg border border-slate-200 bg-white p-4"
+              />
+              <h3 className="mt-4 text-lg font-black text-slate-950">{selectedQrItem.name}</h3>
+              <p className="mt-1 text-sm font-medium text-slate-500">{selectedQrItem.location || 'No location set'} - Inventory ID {selectedQrItem.id}</p>
+              <p className="mt-2 text-xs font-semibold text-slate-400">Payload: inventory:{selectedQrItem.id}</p>
+            </div>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <Button variant="secondary" icon="download" onClick={() => downloadQr(selectedQrItem)}>Download QR</Button>
+              <Button variant="secondary" icon="printer" onClick={() => printQr(selectedQrItem)}>Print</Button>
+              <Button onClick={() => setSelectedQrItem(null)}>Close</Button>
+            </div>
+          </div>
+        )}
       </Modal>
 
       <ConfirmDialog
