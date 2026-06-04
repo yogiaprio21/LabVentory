@@ -3,8 +3,21 @@ const dayjs = require('dayjs')
 const { borrowingLate, dueReminder, borrowingApproved, borrowingRejected, criticalStockAlert } = require('../utils/emailTemplates')
 const { sendMail } = require('../config/mailer')
 
+const adminRecipientsWhere = (labId, institutionId) => ({
+  OR: [
+    { role: { in: ['admin', 'lab_admin'] }, labId },
+    { role: 'institution_admin', institutionId },
+    { role: { in: ['superadmin', 'platform_admin'] } }
+  ]
+})
+
+const withInstitution = (institutionId, data) => ({ institutionId: institutionId || null, ...data })
+
 const requestBorrow = async ({ userId, inventoryId, quantity, dueDate }) => {
-  const item = await prisma.inventory.findUnique({ where: { id: inventoryId }, include: { lab: true } })
+  const item = await prisma.inventory.findUnique({
+    where: { id: inventoryId },
+    include: { lab: { include: { institution: true } } }
+  })
   if (!item) {
     const e = new Error('Inventory not found')
     e.status = 404
@@ -20,18 +33,12 @@ const requestBorrow = async ({ userId, inventoryId, quantity, dueDate }) => {
     include: { user: true }
   })
 
-  // Notify Admins of this lab and all Superadmins
   const admins = await prisma.user.findMany({
-    where: {
-      OR: [
-        { role: 'admin', labId: item.labId },
-        { role: 'superadmin' }
-      ]
-    }
+    where: adminRecipientsWhere(item.labId, item.lab.institutionId)
   })
 
-  await prisma.notification.createMany({
-    data: admins.map(admin => ({
+  if (admins.length) await prisma.notification.createMany({
+    data: admins.map(admin => withInstitution(item.lab.institutionId, {
       userId: admin.id,
       title: 'New Borrowing Request',
       message: `${borrow.user.name} requested ${quantity}x ${item.name}`
@@ -43,7 +50,10 @@ const requestBorrow = async ({ userId, inventoryId, quantity, dueDate }) => {
 
 const approveBorrow = async (id) => {
   return await prisma.$transaction(async (tx) => {
-    const b = await tx.borrowing.findUnique({ where: { id }, include: { inventory: true, user: true } })
+    const b = await tx.borrowing.findUnique({
+      where: { id },
+      include: { inventory: { include: { lab: true } }, user: true }
+    })
     if (!b) {
       const e = new Error('Not Found')
       e.status = 404
@@ -63,11 +73,9 @@ const approveBorrow = async (id) => {
     // Check for critical stock
     const newStock = b.inventory.availableStock - b.quantity
     if (newStock <= b.inventory.minStock) {
-      const admins = await tx.user.findMany({
-        where: { OR: [{ role: 'admin', labId: b.inventory.labId }, { role: 'superadmin' }] }
-      })
-      await tx.notification.createMany({
-        data: admins.map(admin => ({
+      const admins = await tx.user.findMany({ where: adminRecipientsWhere(b.inventory.labId, b.inventory.lab.institutionId) })
+      if (admins.length) await tx.notification.createMany({
+        data: admins.map(admin => withInstitution(b.inventory.lab.institutionId, {
           userId: admin.id,
           title: 'Critical Stock Alert',
           message: `Stock for ${b.inventory.name} is low (${newStock} units left).`
@@ -90,11 +98,11 @@ const approveBorrow = async (id) => {
 
     // Notify Student
     await tx.notification.create({
-      data: {
+      data: withInstitution(b.inventory.lab.institutionId, {
         userId: b.userId,
         title: 'Borrowing Approved',
         message: `Your request for ${b.inventory.name} has been approved.`
-      }
+      })
     })
 
     // Email Student
@@ -106,19 +114,29 @@ const approveBorrow = async (id) => {
 }
 
 const rejectBorrow = async (id) => {
+  const existing = await prisma.borrowing.findUnique({ where: { id } })
+  if (!existing) {
+    const e = new Error('Not Found')
+    e.status = 404
+    throw e
+  }
+  if (existing.status !== 'pending') {
+    const e = new Error('Invalid status')
+    e.status = 400
+    throw e
+  }
   const b = await prisma.borrowing.update({
     where: { id },
     data: { status: 'rejected' },
-    include: { inventory: true, user: true }
+    include: { inventory: { include: { lab: true } }, user: true }
   })
 
-  // Notify Student
   await prisma.notification.create({
-    data: {
+    data: withInstitution(b.inventory.lab.institutionId, {
       userId: b.userId,
       title: 'Borrowing Rejected',
       message: `Your request for ${b.inventory.name} was rejected.`
-    }
+    })
   })
 
   // Email Student
@@ -130,7 +148,7 @@ const rejectBorrow = async (id) => {
 
 const returnBorrow = async (id) => {
   return await prisma.$transaction(async (tx) => {
-    const b = await tx.borrowing.findUnique({ where: { id }, include: { inventory: true } })
+    const b = await tx.borrowing.findUnique({ where: { id }, include: { inventory: { include: { lab: true } } } })
     if (!b) {
       const e = new Error('Not Found')
       e.status = 404
@@ -155,7 +173,7 @@ const markLateAndDueReminders = async (sendMailFn) => {
   const now = dayjs()
   const lates = await prisma.borrowing.findMany({
     where: { status: 'approved', dueDate: { lt: now.toDate() } },
-    include: { user: true, inventory: true }
+    include: { user: true, inventory: { include: { lab: true } } }
   })
   for (const b of lates) {
     // Check if we already alerted about this late borrowing today to avoid spamming
@@ -168,11 +186,11 @@ const markLateAndDueReminders = async (sendMailFn) => {
       await prisma.borrowing.update({ where: { id: b.id }, data: { status: 'late' } })
 
       await prisma.notification.create({
-        data: {
+        data: withInstitution(b.inventory.lab.institutionId, {
           userId: b.userId,
           title: 'Borrowing Overdue',
           message: `Your borrowing of ${b.inventory.name} is now late! Please return it immediately.`
-        }
+        })
       })
 
       const t = borrowingLate(b.user, b.inventory)
@@ -185,7 +203,7 @@ const markLateAndDueReminders = async (sendMailFn) => {
       status: 'approved',
       dueDate: { gte: tomorrow.toDate(), lt: tomorrow.add(1, 'day').toDate() }
     },
-    include: { user: true, inventory: true }
+    include: { user: true, inventory: { include: { lab: true } } }
   })
   for (const b of dueSoon) {
     const today = now.startOf('day').toDate()
@@ -195,11 +213,11 @@ const markLateAndDueReminders = async (sendMailFn) => {
 
     if (!alreadyReminded) {
       await prisma.notification.create({
-        data: {
+        data: withInstitution(b.inventory.lab.institutionId, {
           userId: b.userId,
           title: 'Upcoming Due Date',
           message: `Your borrowing of ${b.inventory.name} is due tomorrow (${dayjs(b.dueDate).format('DD MMM YYYY')}).`
-        }
+        })
       })
       const t = dueReminder(b.user, b.inventory)
       await mailer({ to: b.user.email, subject: t.subject, html: t.html }).catch(() => { })
@@ -208,36 +226,58 @@ const markLateAndDueReminders = async (sendMailFn) => {
 }
 
 const markDamaged = async (id) => {
+  const existing = await prisma.borrowing.findUnique({ where: { id } })
+  if (!existing) {
+    const e = new Error('Not Found')
+    e.status = 404
+    throw e
+  }
+  if (!['approved', 'late', 'returned'].includes(existing.status)) {
+    const e = new Error('Invalid status')
+    e.status = 400
+    throw e
+  }
   const b = await prisma.borrowing.update({
     where: { id },
     data: { status: 'damaged' },
-    include: { user: true, inventory: true }
+    include: { user: true, inventory: { include: { lab: true } } }
   })
 
   await prisma.notification.create({
-    data: {
+    data: withInstitution(b.inventory.lab.institutionId, {
       userId: b.userId,
       title: 'Item Marked Damaged',
       message: `The item "${b.inventory.name}" you borrowed has been marked as damaged by the admin.`
-    }
+    })
   })
 
   return b
 }
 
 const markLost = async (id) => {
+  const existing = await prisma.borrowing.findUnique({ where: { id } })
+  if (!existing) {
+    const e = new Error('Not Found')
+    e.status = 404
+    throw e
+  }
+  if (!['approved', 'late', 'returned'].includes(existing.status)) {
+    const e = new Error('Invalid status')
+    e.status = 400
+    throw e
+  }
   const b = await prisma.borrowing.update({
     where: { id },
     data: { status: 'lost' },
-    include: { user: true, inventory: true }
+    include: { user: true, inventory: { include: { lab: true } } }
   })
 
   await prisma.notification.create({
-    data: {
+    data: withInstitution(b.inventory.lab.institutionId, {
       userId: b.userId,
       title: 'Item Marked Lost',
       message: `The item "${b.inventory.name}" you borrowed has been marked as lost by the admin.`
-    }
+    })
   })
 
   return b

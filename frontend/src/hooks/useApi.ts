@@ -25,7 +25,7 @@ api.interceptors.response.use(
     if (error?.response?.status === 401) {
       localStorage.removeItem('token')
       localStorage.removeItem('user')
-      const publicPages = ['/login', '/register']
+      const publicPages = ['/login', '/register', '/preview']
       const isPublicPage = publicPages.some(p => location.pathname.startsWith(p))
       if (!isPublicPage) {
         location.href = '/login'

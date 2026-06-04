@@ -3,6 +3,8 @@ import { api } from '../../hooks/useApi'
 import { ResponsiveContainer, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, PieChart, Pie, Cell } from 'recharts'
 import { useAuth } from '../../hooks/useAuth'
 import TableSkeleton from '../../components/TableSkeleton'
+import { Icon, PageHeader, StatusBadge } from '../../components/ui'
+import { isPlatformAdmin } from '../../utils/roles'
 
 export default function Dashboard() {
   const [loading, setLoading] = useState(true)
@@ -53,27 +55,18 @@ export default function Dashboard() {
 
     return (
       <div className="space-y-8 animate-fade-in">
-        <div className="flex justify-between items-end">
-          <div>
-            <h1 className="text-3xl font-black text-gray-900 tracking-tight">Student Dashboard</h1>
-            <p className="text-sm text-gray-500 mt-1 font-medium">Overview of your laboratory activity and rentals</p>
-          </div>
-          <div className="hidden sm:block text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em]">Real-time Status</div>
-        </div>
+      <PageHeader title="Student Dashboard" description="Overview of your laboratory activity and rentals." actions={<StatusBadge tone="indigo">Real-time status</StatusBadge>} />
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="card p-8 bg-white border-slate-100 shadow-xl shadow-slate-200/40 relative overflow-hidden group">
-            <div className="absolute -right-4 -bottom-4 w-24 h-24 bg-indigo-50/50 rounded-full blur-2xl group-hover:bg-indigo-100/50 transition-all duration-500" />
+          <div className="card p-6 bg-white">
             <div className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-400 mb-2">Total Borrowed</div>
             <div className="text-4xl font-black text-slate-900">{summary.totalBorrowed}</div>
           </div>
-          <div className="card p-8 bg-white border-slate-100 shadow-xl shadow-slate-200/40 relative overflow-hidden group">
-            <div className="absolute -right-4 -bottom-4 w-24 h-24 bg-emerald-50/50 rounded-full blur-2xl group-hover:bg-emerald-100/50 transition-all duration-500" />
+          <div className="card p-6 bg-white">
             <div className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-400 mb-2">Currently Holding</div>
             <div className="text-4xl font-black text-emerald-600">{summary.activeBorrowed}</div>
           </div>
-          <div className="card p-8 bg-white border-slate-100 shadow-xl shadow-slate-200/40 relative overflow-hidden group">
-            <div className="absolute -right-4 -bottom-4 w-24 h-24 bg-rose-50/50 rounded-full blur-2xl group-hover:bg-rose-100/50 transition-all duration-500" />
+          <div className="card p-6 bg-white">
             <div className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-400 mb-2">Overdue Items</div>
             <div className={`text-4xl font-black ${summary.lateCount > 0 ? 'text-rose-600' : 'text-slate-900'}`}>{summary.lateCount}</div>
           </div>
@@ -140,41 +133,37 @@ export default function Dashboard() {
   return (
     <div className="space-y-8 animate-fade-in">
       <div className="flex justify-between items-end">
-        <div>
-          <h1 className="text-3xl font-black text-gray-900 tracking-tight">
-            {user?.role === 'superadmin' ? 'Global Analytics' : 'Admin Dashboard'}
-          </h1>
-          <p className="text-sm text-gray-500 mt-1 font-medium">Platform overview and performance metrics</p>
-        </div>
-        <div className="hidden sm:block text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em]">Updated {new Date().toLocaleTimeString()}</div>
+        <PageHeader
+          title={isPlatformAdmin(user) ? 'Global Analytics' : 'Admin Dashboard'}
+          description="Platform overview and performance metrics."
+          actions={<StatusBadge tone="slate">Updated {new Date().toLocaleTimeString()}</StatusBadge>}
+        />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="card p-8 bg-white border-l-[6px] border-l-indigo-600 shadow-xl shadow-indigo-100/50 group hover:-translate-y-1.5 transition-all duration-300 hover:shadow-2xl hover:shadow-indigo-200/40">
+        <div className="card border-l-4 border-l-indigo-600 bg-white p-6">
           <div className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-400 mb-2">Total Items</div>
           <div className="text-4xl font-black text-slate-900">{summary.totalItems}</div>
         </div>
-        <div className="card p-8 bg-white border-l-[6px] border-l-cyan-500 shadow-xl shadow-cyan-100/50 group hover:-translate-y-1.5 transition-all duration-300 hover:shadow-2xl hover:shadow-cyan-200/40">
+        <div className="card border-l-4 border-l-sky-500 bg-white p-6">
           <div className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-400 mb-2">Active Borrows</div>
           <div className="text-4xl font-black text-slate-900">{summary.totalBorrowed}</div>
         </div>
-        <div className="card p-8 bg-white border-l-[6px] border-l-rose-500 shadow-xl shadow-rose-100/50 group hover:-translate-y-1.5 transition-all duration-300 hover:shadow-2xl hover:shadow-rose-200/40">
+        <div className="card border-l-4 border-l-rose-500 bg-white p-6">
           <div className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-400 mb-2">Late Returns</div>
           <div className="text-4xl font-black text-rose-600">{summary.lateCount}</div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div className="card p-8 bg-white shadow-xl shadow-slate-200/30 border-slate-50 relative overflow-hidden hover:shadow-2xl hover:shadow-slate-300/40 transition-all duration-500">
+        <div className="card bg-white p-6">
           <div className="flex items-center justify-between mb-8">
             <div>
               <h2 className="text-xs font-black text-slate-800 uppercase tracking-widest">7-Day Borrowing Trends</h2>
               <p className="text-[10px] font-bold text-slate-400 mt-1">Daily loan frequency</p>
             </div>
-            <div className="p-2 bg-indigo-50 rounded-xl">
-              <svg className="w-5 h-5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-              </svg>
+            <div className="rounded-lg bg-indigo-50 p-2 text-indigo-600">
+              <Icon name="activity" className="h-5 w-5" />
             </div>
           </div>
           <div className="h-80 w-full ml-[-15px]">
@@ -223,17 +212,14 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="card p-8 bg-white shadow-xl shadow-slate-200/30 border-slate-50 hover:shadow-2xl hover:shadow-slate-300/40 transition-all duration-500">
+        <div className="card bg-white p-6">
           <div className="flex items-center justify-between mb-8">
             <div>
               <h2 className="text-xs font-black text-slate-800 uppercase tracking-widest text-[11px]">Stock Composition</h2>
               <p className="text-[10px] font-bold text-slate-400 mt-1">Inventory by categories</p>
             </div>
-            <div className="p-2 bg-emerald-50 rounded-xl">
-              <svg className="w-5 h-5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" />
-              </svg>
+            <div className="rounded-lg bg-emerald-50 p-2 text-emerald-600">
+              <Icon name="barChart" className="h-5 w-5" />
             </div>
           </div>
           <div className="h-80">

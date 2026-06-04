@@ -1,15 +1,24 @@
-export type Role = 'superadmin' | 'admin' | 'student'
+export type Role = 'platform_admin' | 'institution_admin' | 'lab_admin' | 'superadmin' | 'admin' | 'student'
+
+export type Institution = {
+  id: number
+  name: string
+  slug: string
+  status?: string
+}
 
 export type User = {
   id: number
   name: string
   email: string
   role: Role
+  institutionId?: number | null
+  institution?: Institution | null
   labId: number | null
   lab?: Lab
 }
 
-export type Lab = { id: number; name: string; location: string }
+export type Lab = { id: number; institutionId?: number; institution?: Institution; name: string; location: string }
 
 export type Category = { id: number; name: string; labId: number }
 
@@ -27,7 +36,7 @@ export type Inventory = {
   lab?: Lab
 }
 
-export type BorrowStatus = 'pending' | 'approved' | 'rejected' | 'returned' | 'late'
+export type BorrowStatus = 'pending' | 'approved' | 'rejected' | 'returned' | 'late' | 'damaged' | 'lost'
 export type Borrowing = {
   id: number
   userId: number

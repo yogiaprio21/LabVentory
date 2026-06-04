@@ -12,8 +12,8 @@ router.use(authenticate)
 router.put('/profile', (req, res, next) => ctrl.updateProfile(req, res).catch(next))
 router.put('/change-password', validate(schemas.users.changePassword), (req, res, next) => ctrl.changePassword(req, res).catch(next))
 
-// Restricted routes for superadmin only
-const adminOnly = authorize('superadmin')
+// Tenant user management: platform admins are global, institution admins are scoped.
+const adminOnly = authorize('superadmin', 'institution_admin')
 
 router.get('/', adminOnly, (req, res, next) => ctrl.list(req, res).catch(next))
 router.get('/:id', adminOnly, validate(schemas.common.idParam), (req, res, next) => ctrl.getById(req, res).catch(next))

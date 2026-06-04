@@ -2,13 +2,16 @@ import { useEffect, useState } from 'react'
 import { api } from '../../hooks/useApi'
 import { AuditLog } from '../../types'
 import TableSkeleton from '../../components/TableSkeleton'
+import { Button, EmptyState, Field, Icon, PageHeader, Pagination, StatusBadge } from '../../components/ui'
 
 export default function AuditPage() {
   const [logs, setLogs] = useState<AuditLog[]>([])
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const [limit] = useState(20)
-  const [from, setFrom] = useState(''); const [to, setTo] = useState(''); const [userId, setUserId] = useState('')
+  const [from, setFrom] = useState('')
+  const [to, setTo] = useState('')
+  const [userId, setUserId] = useState('')
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(false)
 
@@ -24,45 +27,32 @@ export default function AuditPage() {
       setLoading(false)
     }
   }
+
   useEffect(() => { load(page) }, [page])
 
-  const apply = () => { setPage(1); load(1) }
+  const detailText = (details: any) => {
+    if (!details) return 'No details'
+    return typeof details === 'string' ? details : JSON.stringify(details)
+  }
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Security Audit Logs</h1>
-        <p className="text-sm text-gray-500 mt-1">Monitor system-wide activity and administrative actions</p>
-      </div>
+      <PageHeader title="Security Audit Logs" description="Monitor system-wide activity and administrative actions." />
 
-      <div className="card p-6 bg-white shadow-sm border-gray-100">
-        <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-5 gap-4 items-end">
-          <div className="space-y-1.5 lg:col-span-1">
-            <label className="text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">User ID</label>
-            <input className="input w-full" placeholder="Filter by ID..." value={userId} onChange={e => setUserId(e.target.value)} />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Start Date</label>
-            <input className="input w-full" type="date" value={from} onChange={e => setFrom(e.target.value)} />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">End Date</label>
-            <input className="input w-full" type="date" value={to} onChange={e => setTo(e.target.value)} />
-          </div>
-          <button className="btn h-[42px] flex gap-2 items-center justify-center lg:col-span-2" onClick={apply}>
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-            </svg>
-            Apply Filters
-          </button>
+      <section className="card p-4">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_12rem_12rem_auto] md:items-end">
+          <Field label="User ID" placeholder="Filter by ID..." value={userId} onChange={e => setUserId(e.target.value)} />
+          <Field label="Start date" type="date" value={from} onChange={e => setFrom(e.target.value)} />
+          <Field label="End date" type="date" value={to} onChange={e => setTo(e.target.value)} />
+          <Button icon="filter" onClick={() => load(1)}>Apply Filters</Button>
         </div>
-      </div>
+      </section>
 
-      <div className="card overflow-hidden">
-        <div className="overflow-x-auto">
+      <section className="table-shell">
+        <div className="hidden overflow-x-auto xl:block">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-100">
-              <tr className="text-left font-bold text-gray-400 uppercase tracking-wider text-[10px]">
+            <thead className="table-head">
+              <tr>
                 <th className="px-6 py-4">Timestamp</th>
                 <th className="px-6 py-4">Actor</th>
                 <th className="px-6 py-4">Action</th>
@@ -70,105 +60,51 @@ export default function AuditPage() {
                 <th className="px-6 py-4">Change Details</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-50">
+            <tbody className="divide-y divide-slate-100">
               {loading ? (
-                <tr>
-                  <td colSpan={5} className="p-0">
-                    <TableSkeleton rows={10} cols={5} />
+                <tr><td colSpan={5} className="p-0"><TableSkeleton rows={10} cols={5} /></td></tr>
+              ) : logs.length === 0 ? (
+                <tr><td colSpan={5}><EmptyState title="No audit events found" description="Try broadening your filters." icon="shield" /></td></tr>
+              ) : logs.map(l => (
+                <tr key={l.id} className="hover:bg-slate-50/80">
+                  <td className="px-6 py-4 font-mono text-xs text-slate-500">{l.timestamp?.slice(0, 19).replace('T', ' ')}</td>
+                  <td className="px-6 py-4 font-bold text-slate-950">{l.user?.name || `ID: ${l.userId}`}</td>
+                  <td className="px-6 py-4"><StatusBadge>{l.action}</StatusBadge></td>
+                  <td className="px-6 py-4 font-medium text-slate-600">
+                    <span className="capitalize">{l.entity}</span>
+                    <div className="text-xs font-mono text-indigo-600">{l.entityId}</div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="max-w-md truncate text-xs font-medium text-slate-500">{detailText(l.details)}</div>
                   </td>
                 </tr>
-              ) : (
-                <>
-                  {logs.map(l => (
-                    <tr key={l.id} className="hover:bg-gray-50/50 transition-colors group">
-                      <td className="px-6 py-4 font-mono text-xs text-gray-500">
-                        {l.timestamp?.slice(0, 19).replace('T', ' ')}
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="font-bold text-gray-900">{l.user?.name || `ID: ${l.userId}`}</div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex flex-col gap-1">
-                          <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-[10px] font-bold uppercase tracking-tight w-fit">
-                            {l.action}
-                          </span>
-                          {l.details && (
-                            <div className="text-[10px] font-medium text-gray-400 max-w-[200px] truncate">
-                              {typeof l.details === 'string' ? l.details : JSON.stringify(l.details)}
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-gray-600 font-medium">
-                        <span className="capitalize">{l.entity}</span>
-                        <div className="text-[10px] font-mono text-indigo-600">{l.entityId}</div>
-                      </td>
-                      <td className="px-6 py-4">
-                        {l.details && typeof l.details === 'object' && !Array.isArray(l.details) && (
-                          <div className="space-y-1">
-                            {Object.entries(l.details).map(([key, val]: [string, any]) => (
-                              <div key={key} className="text-[10px] flex gap-2 items-center">
-                                <span className="font-bold text-gray-500 uppercase tracking-tighter">{key}:</span>
-                                {val && typeof val === 'object' && 'old' in val ? (
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="text-rose-500 line-through opacity-60">{String(val.old)}</span>
-                                    <svg className="w-2.5 h-2.5 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                                    </svg>
-                                    <span className="text-emerald-600 font-bold">{String(val.new)}</span>
-                                  </div>
-                                ) : (
-                                  <span className="text-gray-900 truncate max-w-[100px]">{String(val)}</span>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                  {logs.length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="px-6 py-12 text-center text-gray-400 italic">No audit events match your criteria.</td>
-                    </tr>
-                  )}
-                </>
-              )}
+              ))}
             </tbody>
           </table>
         </div>
 
-        {/* Pagination Footer */}
-        <div className="px-6 py-4 bg-gray-50/30 border-t border-gray-100 flex items-center justify-between">
-          <div className="text-xs font-bold text-gray-500 uppercase tracking-widest">
-            Showing <span className="text-indigo-600">{logs.length}</span> of <span className="text-gray-900">{total}</span> Records
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              className="p-2 rounded-xl border border-gray-200 bg-white text-gray-600 disabled:opacity-50 disabled:bg-gray-50 transition-all hover:bg-gray-50 active:scale-95"
-              onClick={() => setPage(page - 1)}
-              disabled={page === 1 || loading}
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-            <div className="flex items-center gap-1.5 px-4 h-10 rounded-xl bg-white border border-gray-200 shadow-sm">
-              <span className="text-xs font-bold text-indigo-600 tracking-tighter">Page {page}</span>
-              <span className="text-xs font-bold text-gray-400 capitalize">of {totalPages}</span>
-            </div>
-            <button
-              className="p-2 rounded-xl border border-gray-200 bg-white text-gray-600 disabled:opacity-50 disabled:bg-gray-50 transition-all hover:bg-gray-50 active:scale-95"
-              onClick={() => setPage(page + 1)}
-              disabled={page === totalPages || loading}
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
-          </div>
+        <div className="space-y-3 p-3 xl:hidden">
+          {loading ? <TableSkeleton rows={5} cols={2} /> : logs.length === 0 ? (
+            <EmptyState title="No audit events found" description="Try broadening your filters." icon="shield" />
+          ) : logs.map(l => (
+            <article key={l.id} className="mobile-record">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h3 className="font-extrabold text-slate-950">{l.user?.name || `ID: ${l.userId}`}</h3>
+                  <p className="mt-1 font-mono text-xs text-slate-500">{l.timestamp?.slice(0, 19).replace('T', ' ')}</p>
+                </div>
+                <StatusBadge>{l.action}</StatusBadge>
+              </div>
+              <div className="mt-4 rounded-lg bg-slate-50 p-3 text-sm text-slate-600">
+                <div className="flex items-center gap-2 font-bold capitalize text-slate-800"><Icon name="activity" />{l.entity} #{l.entityId}</div>
+                <p className="mt-2 line-clamp-3 text-xs">{detailText(l.details)}</p>
+              </div>
+            </article>
+          ))}
         </div>
-      </div>
+
+        <Pagination page={page} totalPages={totalPages} totalItems={total} currentCount={logs.length} label="Records" loading={loading} onPrev={() => setPage(page - 1)} onNext={() => setPage(page + 1)} />
+      </section>
     </div>
   )
 }

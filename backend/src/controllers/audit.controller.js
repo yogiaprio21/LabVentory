@@ -1,26 +1,29 @@
 const { prisma } = require('../prisma/client')
+const { isPlatformAdmin, isInstitutionAdmin, tenantIdOf } = require('../utils/tenancy')
 
 const listLogs = async (req, res) => {
   const { userId, from, to } = req.query
   const page = Number(req.query.page) || 1
   const limit = Number(req.query.limit) || 20
 
-  const where = {}
-  if (userId) where.userId = Number(userId)
+  const filters = []
   if (from || to) {
-    where.timestamp = {}
-    if (from) where.timestamp.gte = new Date(from)
-    if (to) where.timestamp.lte = new Date(to)
+    const timestamp = {}
+    if (from) timestamp.gte = new Date(from)
+    if (to) timestamp.lte = new Date(to)
+    filters.push({ timestamp })
   }
-  // Admin restricted to their lab users
-  if (req.user.role === 'admin') {
-    const users = await prisma.user.findMany({ where: { labId: req.user.labId }, select: { id: true } })
-    const ids = users.map(u => u.id)
-    where.userId = where.userId ? where.userId : { in: ids }
-    if (where.userId && typeof where.userId === 'number' && !ids.includes(where.userId)) {
-      return res.json({ data: [], meta: { total: 0, page, limit, totalPages: 0 } })
+  if (userId) filters.push({ userId: Number(userId) })
+
+  if (!isPlatformAdmin(req.user)) {
+    if (isInstitutionAdmin(req.user)) {
+      filters.push({ institutionId: tenantIdOf(req.user) || -1 })
+    } else {
+      filters.push({ user: { labId: req.user.labId || -1 } })
     }
   }
+
+  const where = filters.length ? { AND: filters } : {}
   const [total, data] = await Promise.all([
     prisma.auditLog.count({ where }),
     prisma.auditLog.findMany({

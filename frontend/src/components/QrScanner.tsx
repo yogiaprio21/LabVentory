@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Html5QrcodeScanner } from 'html5-qrcode';
+import { Button, Icon } from './ui';
 
 interface QrScannerProps {
     onScan: (decodedText: string) => void;
@@ -37,18 +38,16 @@ export default function QrScanner({ onScan, onClose }: QrScannerProps) {
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-                <div className="p-4 border-b border-gray-100 flex justify-between items-center">
-                    <h3 className="font-bold text-gray-800">Scan QR Code</h3>
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-                        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                    </button>
+            <div className="w-full max-w-md overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xl">
+                <div className="flex items-center justify-between border-b border-slate-100 p-4">
+                    <h3 className="font-extrabold text-slate-900">Scan QR Code</h3>
+                    <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close QR scanner">
+                        <Icon name="x" className="h-5 w-5" />
+                    </Button>
                 </div>
                 <div className="p-4">
-                    <div id="qr-reader" className="overflow-hidden rounded-xl border border-gray-100"></div>
-                    <p className="text-center text-xs text-gray-400 mt-4">Point your camera at the inventory QR code</p>
+                    <div id="qr-reader" className="overflow-hidden rounded-lg border border-slate-200"></div>
+                    <p className="mt-4 text-center text-xs font-medium text-slate-500">Point your camera at the inventory QR code.</p>
                 </div>
             </div>
         </div>

@@ -16,5 +16,3 @@ router.post('/:id/lost', authorize('admin', 'superadmin'), validate(schemas.comm
 router.get('/', (req, res, next) => ctrl.list(req, res).catch(next))
 
 module.exports = router
-
-module.exports = router

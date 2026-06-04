@@ -1,29 +1,42 @@
+import { Suspense, lazy } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import { AuthProvider, useAuth } from './hooks/useAuth'
-import Login from './pages/Login'
-import Register from './pages/Register'
-import AdminDashboard from './pages/Admin/Dashboard'
-import Labs from './pages/Superadmin/Labs'
-import Analytics from './pages/Superadmin/Analytics'
-import Users from './pages/Superadmin/Users'
-import InventoryPage from './pages/Inventory/InventoryPage'
-import BorrowingsPage from './pages/Borrowings/BorrowingsPage'
-import AuditPage from './pages/Audit/AuditPage'
-import ReportsPage from './pages/Reports/ReportsPage'
-import ProfilePage from './pages/ProfilePage'
-import NotFound from './pages/NotFound'
 import Layout from './components/Layout'
 import Protected from './components/ProtectedRoute'
+import { isPlatformAdmin } from './utils/roles'
+
+const Login = lazy(() => import('./pages/Login'))
+const Register = lazy(() => import('./pages/Register'))
+const PreviewPage = lazy(() => import('./pages/PreviewPage'))
+const AdminDashboard = lazy(() => import('./pages/Admin/Dashboard'))
+const Labs = lazy(() => import('./pages/Superadmin/Labs'))
+const Analytics = lazy(() => import('./pages/Superadmin/Analytics'))
+const Users = lazy(() => import('./pages/Superadmin/Users'))
+const InventoryPage = lazy(() => import('./pages/Inventory/InventoryPage'))
+const BorrowingsPage = lazy(() => import('./pages/Borrowings/BorrowingsPage'))
+const AuditPage = lazy(() => import('./pages/Audit/AuditPage'))
+const ReportsPage = lazy(() => import('./pages/Reports/ReportsPage'))
+const ProfilePage = lazy(() => import('./pages/ProfilePage'))
+const NotFound = lazy(() => import('./pages/NotFound'))
+
+function RouteFallback() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-slate-50">
+      <div className="h-9 w-9 animate-spin rounded-full border-2 border-slate-200 border-t-indigo-600" />
+    </div>
+  )
+}
 
 function AppRoutes() {
   const { user, loading } = useAuth()
   if (loading) return null
   return (
     <Routes>
-      <Route path="/" element={user ? <Navigate to={user.role === 'superadmin' ? '/superadmin/analytics' : '/dashboard'} /> : <Navigate to="/login" />} />
+      <Route path="/" element={user ? <Navigate to={isPlatformAdmin(user) ? '/superadmin/analytics' : '/dashboard'} /> : <Navigate to="/login" />} />
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
+      <Route path="/preview" element={<PreviewPage />} />
       <Route element={<Protected />}>
         <Route element={<Layout />}>
           <Route path="/dashboard" element={<AdminDashboard />} />
@@ -45,7 +58,9 @@ function AppRoutes() {
 export default function App() {
   return (
     <AuthProvider>
-      <AppRoutes />
+      <Suspense fallback={<RouteFallback />}>
+        <AppRoutes />
+      </Suspense>
       <Toaster position="top-right" />
     </AuthProvider>
   )

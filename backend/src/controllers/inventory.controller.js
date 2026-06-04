@@ -1,11 +1,15 @@
 const { prisma } = require('../prisma/client')
 const { createInventory, updateInventory, ensureStockAvailable } = require('../services/inventory.service')
 const { logAudit } = require('../utils/audit')
+const { assertLabAccess, assertCategoryAccess, assertInventoryAccess, scopedInventoryWhere, isPlatformAdmin, isInstitutionAdmin, badRequest } = require('../utils/tenancy')
 
 const create = async (req, res) => {
   const { name, categoryId, labId, totalStock, availableStock, minStock, location, condition } = req.body
-  const useLab = req.user.role === 'admin' ? req.user.labId : labId
-  const data = { name, categoryId, labId: useLab, totalStock, availableStock, minStock: minStock || 0, location, condition }
+  const useLab = (!isPlatformAdmin(req.user) && !isInstitutionAdmin(req.user)) ? req.user.labId : labId
+  if (!useLab) throw badRequest('labId is required')
+  await assertLabAccess(req.user, useLab)
+  await assertCategoryAccess(req.user, categoryId, useLab)
+  const data = { name, categoryId, labId: Number(useLab), totalStock, availableStock, minStock: minStock || 0, location, condition }
   const item = await createInventory(data)
   await logAudit({ userId: req.user.id, action: 'create', entity: 'inventory', entityId: item.id, details: data })
   res.status(201).json(item)
@@ -13,18 +17,20 @@ const create = async (req, res) => {
 
 const update = async (req, res) => {
   const id = Number(req.params.id)
-  const existing = await prisma.inventory.findUnique({ where: { id } })
+  const existing = await assertInventoryAccess(req.user, id).catch(err => {
+    if (err.status === 403) {
+      err.message = 'Not Found'
+      err.status = 404
+    }
+    throw err
+  })
   if (!existing) {
     const e = new Error('Not Found')
     e.status = 404
     throw e
   }
-  if (req.user.role === 'admin' && existing.labId !== req.user.labId) {
-    const e = new Error('Forbidden')
-    e.status = 403
-    throw e
-  }
   const { name, categoryId, totalStock, availableStock, minStock, location, condition } = req.body
+  await assertCategoryAccess(req.user, categoryId, existing.labId)
 
   // Track changes for audit
   const changes = {}
@@ -46,15 +52,16 @@ const update = async (req, res) => {
 
 const remove = async (req, res) => {
   const id = Number(req.params.id)
-  const existing = await prisma.inventory.findUnique({ where: { id } })
+  const existing = await assertInventoryAccess(req.user, id).catch(err => {
+    if (err.status === 403) {
+      err.message = 'Not Found'
+      err.status = 404
+    }
+    throw err
+  })
   if (!existing) {
     const e = new Error('Not Found')
     e.status = 404
-    throw e
-  }
-  if (req.user.role === 'admin' && existing.labId !== req.user.labId) {
-    const e = new Error('Forbidden')
-    e.status = 403
     throw e
   }
   await prisma.inventory.delete({ where: { id } })
@@ -64,17 +71,7 @@ const remove = async (req, res) => {
 
 const get = async (req, res) => {
   const id = Number(req.params.id)
-  const existing = await prisma.inventory.findUnique({ where: { id } })
-  if (!existing) {
-    const e = new Error('Not Found')
-    e.status = 404
-    throw e
-  }
-  if ((req.user.role === 'student' || req.user.role === 'admin') && existing.labId !== req.user.labId) {
-    const e = new Error('Forbidden')
-    e.status = 403
-    throw e
-  }
+  const existing = await assertInventoryAccess(req.user, id)
   res.json(existing)
 }
 
@@ -85,11 +82,10 @@ const list = async (req, res) => {
   const search = req.query.q || ''
   const categoryId = req.query.categoryId && req.query.categoryId !== 'all' ? Number(req.query.categoryId) : undefined
 
-  const where = {
-    ...(req.user.role === 'admin' ? { labId: req.user.labId } : {}),
+  const where = scopedInventoryWhere(req.user, {
     ...(search ? { name: { contains: search, mode: 'insensitive' } } : {}),
     ...(categoryId ? { categoryId } : {})
-  }
+  })
 
   const [data, total] = await Promise.all([
     prisma.inventory.findMany({

@@ -1,5 +1,7 @@
 const { z } = require('zod')
 
+const roleEnum = z.enum(['platform_admin', 'institution_admin', 'lab_admin', 'admin', 'student', 'superadmin'])
+
 const auth = {
     login: z.object({
         body: z.object({
@@ -12,7 +14,8 @@ const auth = {
             name: z.string().min(2),
             email: z.string().email(),
             password: z.string().min(6),
-            role: z.enum(['admin', 'student', 'superadmin']).optional(),
+            role: roleEnum.optional(),
+            institutionId: z.number().optional(),
             labId: z.number().optional()
         })
     }),
@@ -21,6 +24,7 @@ const auth = {
             name: z.string().min(2),
             email: z.string().email(),
             password: z.string().min(6),
+            institutionSlug: z.string().min(1).optional(),
             labId: z.number()
         })
     })
@@ -31,7 +35,8 @@ const users = {
         body: z.object({
             name: z.string().min(2).optional(),
             email: z.string().email().optional(),
-            role: z.enum(['admin', 'student', 'superadmin']).optional(),
+            role: roleEnum.optional(),
+            institutionId: z.number().nullable().optional(),
             labId: z.number().nullable().optional(),
             password: z.string().min(6).optional()
         })
@@ -49,6 +54,7 @@ const inventory = {
         body: z.object({
             name: z.string().min(2),
             categoryId: z.number(),
+            institutionId: z.number().optional(),
             labId: z.number().optional(),
             totalStock: z.number().min(0),
             availableStock: z.number().min(0),

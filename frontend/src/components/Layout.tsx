@@ -1,154 +1,163 @@
-import { useState } from 'react'
-import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { useAuth } from '../hooks/useAuth'
+import { useMemo, useState } from 'react'
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import cls from 'classnames'
-
+import { useAuth } from '../hooks/useAuth'
 import NotificationBell from './NotificationBell'
+import { ConfirmDialog, Icon, iconButtonLabel } from './ui'
+import { roleLabel } from '../utils/roles'
+
+type NavItem = {
+  to: string
+  label: string
+  description: string
+  icon: Parameters<typeof Icon>[0]['name']
+  roles: string[]
+}
+
+const nav: NavItem[] = [
+  { to: '/superadmin/analytics', label: 'Analytics', description: 'Global platform metrics', icon: 'barChart', roles: ['superadmin', 'platform_admin'] },
+  { to: '/dashboard', label: 'Dashboard', description: 'Activity overview', icon: 'home', roles: ['admin', 'lab_admin', 'institution_admin', 'student'] },
+  { to: '/inventory', label: 'Inventory', description: 'Equipment and stock', icon: 'package', roles: ['admin', 'lab_admin', 'institution_admin', 'superadmin', 'platform_admin'] },
+  { to: '/borrowings', label: 'Borrowings', description: 'Requests and returns', icon: 'bookOpen', roles: ['student', 'admin', 'lab_admin', 'institution_admin', 'superadmin', 'platform_admin'] },
+  { to: '/audit', label: 'Audit Logs', description: 'Security activity', icon: 'shield', roles: ['admin', 'lab_admin', 'institution_admin', 'superadmin', 'platform_admin'] },
+  { to: '/reports', label: 'Reports', description: 'PDF exports', icon: 'download', roles: ['admin', 'lab_admin', 'institution_admin', 'superadmin', 'platform_admin'] },
+  { to: '/superadmin/labs', label: 'Labs', description: 'Facilities', icon: 'building', roles: ['institution_admin', 'superadmin', 'platform_admin'] },
+  { to: '/superadmin/users', label: 'Users', description: 'Accounts and roles', icon: 'users', roles: ['institution_admin', 'superadmin', 'platform_admin'] }
+]
+
+function Brand() {
+  return (
+    <Link to="/" className="flex items-center gap-3">
+      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-600 text-white shadow-sm shadow-indigo-200">
+        <Icon name="package" className="h-5 w-5" strokeWidth={2.3} />
+      </div>
+      <div>
+        <span className="block text-xl font-black tracking-tight text-slate-950">LabVentory</span>
+        <span className="block text-[11px] font-semibold uppercase tracking-wider text-slate-400">Lab operations</span>
+      </div>
+    </Link>
+  )
+}
+
+function NavList({ items, onNavigate }: { items: NavItem[]; onNavigate?: () => void }) {
+  return (
+    <nav className="space-y-1">
+      {items.map(item => (
+        <NavLink
+          key={item.to}
+          to={item.to}
+          onClick={onNavigate}
+          className={({ isActive }) => cls(
+            'group flex min-h-12 items-center gap-3 rounded-lg px-3 py-2 text-sm font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40',
+            isActive ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-200' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-950'
+          )}
+        >
+          {({ isActive }) => (
+            <>
+              <Icon name={item.icon} className={cls('h-5 w-5', isActive ? 'text-white' : 'text-slate-400 group-hover:text-slate-700')} />
+              <span className="min-w-0">
+                <span className="block truncate">{item.label}</span>
+                <span className={cls('block truncate text-[11px] font-semibold', isActive ? 'text-indigo-100' : 'text-slate-400')}>{item.description}</span>
+              </span>
+            </>
+          )}
+        </NavLink>
+      ))}
+    </nav>
+  )
+}
 
 export default function Layout() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const [confirmLogout, setConfirmLogout] = useState(false)
 
-  const nav = [
-    { to: '/superadmin/analytics', label: 'Global Analytics', roles: ['superadmin'] },
-    { to: '/dashboard', label: 'Dashboard', roles: ['admin', 'student'] },
-    { to: '/inventory', label: 'Inventory', roles: ['admin', 'superadmin'] },
-    { to: '/borrowings', label: 'Borrowings', roles: ['student', 'admin', 'superadmin'] },
-    { to: '/audit', label: 'Audit Logs', roles: ['admin', 'superadmin'] },
-    { to: '/reports', label: 'Reports', roles: ['admin', 'superadmin'] },
-    { to: '/superadmin/labs', label: 'Labs', roles: ['superadmin'] },
-    { to: '/superadmin/users', label: 'Users', roles: ['superadmin'] }
-  ]
+  const filteredNav = useMemo(() => nav.filter(n => n.roles.includes(user!.role)), [user])
+  const activePage = filteredNav.find(n => location.pathname === n.to) || filteredNav.find(n => location.pathname.startsWith(n.to))
 
-  const filteredNav = nav.filter(n => n.roles.includes(user!.role))
+  const handleLogout = () => {
+    logout()
+    setConfirmLogout(false)
+    navigate('/login', { replace: true })
+  }
 
   return (
-    <div className="h-full flex bg-slate-50/50">
-      {/* Sidebar - Desktop */}
-      <aside className="w-72 bg-white border-r border-slate-100 flex flex-col hidden md:flex shadow-sm z-30">
-        <div className="p-8">
-          <Link to="/" className="flex items-center gap-3 group">
-            <div className="w-10 h-10 bg-gradient-to-tr from-indigo-600 to-cyan-500 rounded-xl flex items-center justify-center text-white font-bold group-hover:rotate-12 transition-transform shadow-lg shadow-indigo-100">
-              L
-            </div>
-            <span className="font-black text-2xl tracking-tight text-slate-900">LabVentory</span>
-          </Link>
-          <div className="mt-6 p-4 bg-slate-50/50 rounded-2xl border border-slate-100">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Authenticated Profile</p>
-            <p className="text-sm font-bold text-slate-700 mt-1 truncate">{user?.name}</p>
-            <p className="text-xs text-indigo-600 font-bold uppercase tracking-tight mt-0.5">{user?.role}</p>
+    <div className="flex h-full overflow-hidden bg-slate-50">
+      <aside className="hidden w-72 shrink-0 border-r border-slate-200 bg-white md:flex md:flex-col">
+        <div className="border-b border-slate-100 p-6">
+          <Brand />
+          <div className="mt-6 rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Signed in</p>
+            <p className="mt-1 truncate text-sm font-bold text-slate-800">{user?.name}</p>
+            <p className="text-xs font-bold capitalize text-indigo-600">{roleLabel(user?.role)}</p>
+            {user?.institution?.name && <p className="mt-1 truncate text-[11px] font-semibold text-slate-500">{user.institution.name}</p>}
           </div>
         </div>
-
-        <nav className="flex-1 px-4 space-y-1.5 overflow-y-auto">
-          {filteredNav.map(n => (
-            <NavLink
-              key={n.to}
-              to={n.to}
-              className={({ isActive }) => cls(
-                'flex items-center gap-3 px-4 py-3.5 rounded-2xl text-sm font-bold transition-all duration-300',
-                isActive
-                  ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-200 translate-x-1'
-                  : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900 border border-transparent'
-              )}
-            >
-              {n.label}
-            </NavLink>
-          ))}
-        </nav>
-
-        <div className="p-6 border-t border-slate-100">
+        <div className="flex-1 overflow-y-auto p-4">
+          <NavList items={filteredNav} />
+        </div>
+        <div className="border-t border-slate-100 p-4">
           <button
-            className="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-2xl text-sm font-bold text-rose-500 bg-rose-50/30 hover:bg-rose-50 border border-rose-100/50 transition-all hover:scale-[1.02]"
-            onClick={() => { logout(); navigate('/login') }}
+            className="flex w-full items-center justify-center gap-2 rounded-lg border border-rose-100 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-600 transition hover:bg-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/30"
+            onClick={() => setConfirmLogout(true)}
           >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-            </svg>
+            <Icon name="logOut" />
             Sign Out
           </button>
         </div>
       </aside>
 
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Header */}
-        <header className="h-20 bg-white/70 backdrop-blur-xl border-b border-slate-100 flex items-center justify-between px-6 md:px-10 z-20">
-          <div className="flex items-center gap-4">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <header className="flex min-h-16 items-center justify-between border-b border-slate-200 bg-white/90 px-4 backdrop-blur md:px-8">
+          <div className="flex min-w-0 items-center gap-3">
             <button
-              className="md:hidden p-2 rounded-xl bg-slate-50 text-slate-600 hover:bg-slate-100 transition-colors"
+              className="rounded-lg p-2 text-slate-600 transition hover:bg-slate-100 md:hidden"
               onClick={() => setIsMobileMenuOpen(true)}
+              {...iconButtonLabel('Open navigation')}
             >
-              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
+              <Icon name="menu" className="h-5 w-5" />
             </button>
-            <div className="md:hidden">
-              <Link to="/" className="font-black text-xl text-slate-900 tracking-tight">LabVentory</Link>
-            </div>
-            <div className="hidden md:block">
-              <h2 className="text-lg font-bold text-slate-800">
-                Dashboard <span className="text-slate-400 font-medium text-sm ml-2">/ Activity Overview</span>
-              </h2>
+            <div className="min-w-0">
+              <p className="truncate text-base font-extrabold text-slate-950 md:text-lg">{activePage?.label || 'Workspace'}</p>
+              <p className="hidden truncate text-xs font-semibold text-slate-500 sm:block">{activePage?.description || 'Manage laboratory operations'}</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-4">
             <NotificationBell />
-            <div className="h-8 w-px bg-slate-100 mx-2 hidden sm:block"></div>
-            <Link to="/profile" className="flex items-center gap-4 hover:opacity-80 transition-opacity">
-              <div className="text-right hidden sm:block">
-                <p className="text-sm font-bold text-slate-900 leading-none">{user?.name}</p>
-                <p className="text-[10px] text-indigo-500 font-bold uppercase tracking-widest mt-1">{user?.role}</p>
+            <Link to="/profile" className="flex items-center gap-3 rounded-lg p-1.5 transition hover:bg-slate-100">
+              <div className="hidden text-right sm:block">
+                <p className="text-sm font-bold leading-none text-slate-900">{user?.name}</p>
+                <p className="mt-1 text-[11px] font-bold capitalize text-slate-500">{roleLabel(user?.role)}</p>
               </div>
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-50 to-white border border-indigo-100 flex items-center justify-center text-indigo-700 font-black shadow-sm ring-4 ring-white">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-indigo-100 bg-indigo-50 text-sm font-black text-indigo-700">
                 {user?.name?.charAt(0).toUpperCase()}
               </div>
             </Link>
           </div>
         </header>
 
-        {/* Mobile Navigation Overlay */}
         {isMobileMenuOpen && (
           <div className="fixed inset-0 z-[100] md:hidden">
-            <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm animate-fade-in" onClick={() => setIsMobileMenuOpen(false)} />
-            <aside className="absolute inset-y-0 left-0 w-80 bg-white shadow-2xl animate-slide-in flex flex-col">
-              <div className="p-8 flex items-center justify-between border-b border-slate-50">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-bold">L</div>
-                  <span className="font-black text-2xl text-slate-900">LabVentory</span>
-                </div>
-                <button className="p-2 text-slate-400" onClick={() => setIsMobileMenuOpen(false)}>
-                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
+            <div className="absolute inset-0 bg-slate-950/45 backdrop-blur-sm" onClick={() => setIsMobileMenuOpen(false)} />
+            <aside className="absolute inset-y-0 left-0 flex w-[min(22rem,calc(100vw-2rem))] flex-col bg-white shadow-2xl">
+              <div className="flex items-center justify-between border-b border-slate-100 p-5">
+                <Brand />
+                <button className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" onClick={() => setIsMobileMenuOpen(false)} {...iconButtonLabel('Close navigation')}>
+                  <Icon name="x" className="h-5 w-5" />
                 </button>
               </div>
-
-              <nav className="flex-1 p-6 space-y-2 overflow-y-auto">
-                {filteredNav.map(n => (
-                  <NavLink
-                    key={n.to}
-                    to={n.to}
-                    onClick={() => setIsMobileMenuOpen(false)}
-                    className={({ isActive }) => cls(
-                      'flex items-center gap-4 px-5 py-4 rounded-2xl text-base font-bold transition-all',
-                      isActive
-                        ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-100'
-                        : 'text-slate-600 hover:bg-slate-50'
-                    )}
-                  >
-                    {n.label}
-                  </NavLink>
-                ))}
-              </nav>
-
-              <div className="p-6 border-t border-slate-50">
+              <div className="flex-1 overflow-y-auto p-4">
+                <NavList items={filteredNav} onNavigate={() => setIsMobileMenuOpen(false)} />
+              </div>
+              <div className="border-t border-slate-100 p-4">
                 <button
-                  className="w-full flex items-center justify-center gap-3 px-6 py-4 rounded-2xl bg-rose-50 text-rose-600 font-bold"
-                  onClick={() => { logout(); navigate('/login') }}
+                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-rose-50 px-4 py-3 text-sm font-bold text-rose-600"
+                  onClick={() => setConfirmLogout(true)}
                 >
+                  <Icon name="logOut" />
                   Sign Out
                 </button>
               </div>
@@ -156,12 +165,21 @@ export default function Layout() {
           </div>
         )}
 
-        <main className="flex-1 overflow-y-auto p-6 md:p-12">
-          <div className="max-w-7xl mx-auto h-full">
+        <main className="flex-1 overflow-y-auto p-4 md:p-8">
+          <div className="mx-auto w-full max-w-7xl">
             <Outlet />
           </div>
         </main>
       </div>
+
+      <ConfirmDialog
+        open={confirmLogout}
+        title="Sign out of LabVentory?"
+        description="You will return to the login page and need to sign in again to access protected pages."
+        confirmLabel="Sign Out"
+        onCancel={() => setConfirmLogout(false)}
+        onConfirm={handleLogout}
+      />
     </div>
   )
 }

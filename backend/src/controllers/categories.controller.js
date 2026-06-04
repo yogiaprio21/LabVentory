@@ -1,9 +1,10 @@
 const { prisma } = require('../prisma/client')
+const { assertLabAccess, assertCategoryAccess, scopedCategoryWhere, isPlatformAdmin, isInstitutionAdmin } = require('../utils/tenancy')
 
 const createCategory = async (req, res) => {
   const { name, labId } = req.body
   let useLab = labId
-  if (req.user.role === 'admin' || req.user.role === 'student') {
+  if (!isPlatformAdmin(req.user) && !isInstitutionAdmin(req.user)) {
     useLab = req.user.labId
   }
 
@@ -13,22 +14,24 @@ const createCategory = async (req, res) => {
     throw e
   }
 
-  const cat = await prisma.category.create({ data: { name, labId: useLab } })
+  await assertLabAccess(req.user, useLab)
+  const cat = await prisma.category.create({ data: { name, labId: Number(useLab) } })
   res.status(201).json(cat)
 }
 
 const updateCategory = async (req, res) => {
   const id = Number(req.params.id)
   const { name } = req.body
-  const existing = await prisma.category.findUnique({ where: { id } })
+  const existing = await assertCategoryAccess(req.user, id).catch(err => {
+    if (err.status === 403) {
+      err.message = 'Not Found'
+      err.status = 404
+    }
+    throw err
+  })
   if (!existing) {
     const e = new Error('Not Found')
     e.status = 404
-    throw e
-  }
-  if (req.user.role === 'admin' && existing.labId !== req.user.labId) {
-    const e = new Error('Forbidden')
-    e.status = 403
     throw e
   }
   const cat = await prisma.category.update({ where: { id }, data: { name } })
@@ -37,15 +40,16 @@ const updateCategory = async (req, res) => {
 
 const deleteCategory = async (req, res) => {
   const id = Number(req.params.id)
-  const existing = await prisma.category.findUnique({ where: { id } })
+  const existing = await assertCategoryAccess(req.user, id).catch(err => {
+    if (err.status === 403) {
+      err.message = 'Not Found'
+      err.status = 404
+    }
+    throw err
+  })
   if (!existing) {
     const e = new Error('Not Found')
     e.status = 404
-    throw e
-  }
-  if (req.user.role === 'admin' && existing.labId !== req.user.labId) {
-    const e = new Error('Forbidden')
-    e.status = 403
     throw e
   }
   await prisma.category.delete({ where: { id } })
@@ -53,7 +57,7 @@ const deleteCategory = async (req, res) => {
 }
 
 const listCategories = async (req, res) => {
-  const where = req.user.role === 'student' || req.user.role === 'admin' ? { labId: req.user.labId } : {}
+  const where = scopedCategoryWhere(req.user)
   const cats = await prisma.category.findMany({ where, orderBy: { id: 'asc' } })
   res.json(cats)
 }

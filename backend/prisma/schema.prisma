@@ -8,6 +8,9 @@ datasource db {
 }
 
 enum Role {
+  platform_admin
+  institution_admin
+  lab_admin
   superadmin
   admin
   student
@@ -29,34 +32,57 @@ model User {
   email     String        @unique
   password  String
   role      Role
+  institutionId Int?
+  institution Institution? @relation(fields: [institutionId], references: [id])
   labId     Int?
   lab       Lab?          @relation(fields: [labId], references: [id])
   borrowings Borrowing[]
   auditLogs AuditLog[]
   notifications Notification[]
   createdAt DateTime      @default(now())
+  @@index([institutionId])
+  @@index([labId])
 }
 
 model Notification {
   id        Int      @id @default(autoincrement())
+  institutionId Int?
+  institution Institution? @relation(fields: [institutionId], references: [id])
   userId    Int
   user      User     @relation(fields: [userId], references: [id])
   title     String
   message   String
   isRead    Boolean  @default(false)
   createdAt DateTime @default(now())
+  @@index([institutionId])
   @@index([userId])
   @@index([isRead])
 }
 
+model Institution {
+  id        Int      @id @default(autoincrement())
+  name      String
+  slug      String   @unique
+  status    String   @default("active")
+  labs      Lab[]
+  users     User[]
+  notifications Notification[]
+  auditLogs AuditLog[]
+  createdAt DateTime @default(now())
+}
+
 model Lab {
   id         Int         @id @default(autoincrement())
+  institutionId Int
+  institution Institution @relation(fields: [institutionId], references: [id])
   name       String
   location   String
   users      User[]
   categories Category[]
   inventory  Inventory[]
   createdAt  DateTime    @default(now())
+  @@index([institutionId])
+  @@unique([institutionId, name])
 }
 
 model Category {
@@ -108,6 +134,8 @@ model Borrowing {
 
 model AuditLog {
   id        Int      @id @default(autoincrement())
+  institutionId Int?
+  institution Institution? @relation(fields: [institutionId], references: [id])
   userId    Int
   user      User     @relation(fields: [userId], references: [id])
   action    String
@@ -115,4 +143,6 @@ model AuditLog {
   entityId  Int
   details   Json?
   timestamp DateTime @default(now())
+  @@index([institutionId])
+  @@index([userId])
 }

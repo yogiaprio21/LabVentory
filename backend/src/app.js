@@ -7,11 +7,22 @@ const rateLimit = require('express-rate-limit')
 const routes = require('./routes')
 const { errorHandler, notFound } = require('./middleware/error')
 const { swaggerUi, swaggerSpec } = require('./config/swagger')
+const { env } = require('./config/env')
 
 const app = express()
 
+if (env.NODE_ENV === 'production') {
+    app.set('trust proxy', 1)
+}
+
 app.use(helmet())
-app.use(cors())
+app.use(cors({
+    origin(origin, callback) {
+        if (!origin || env.CORS_ORIGINS.includes(origin)) return callback(null, true)
+        return callback(new Error('Not allowed by CORS'))
+    },
+    credentials: true
+}))
 app.use(express.json({ limit: '1mb' }))
 app.use(morgan('combined'))
 

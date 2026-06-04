@@ -7,12 +7,25 @@ const prisma = new PrismaClient()
 async function run() {
   console.log('Starting seed...')
 
-  // Use environment variables from centralized config
-  const superEmail = env.INITIAL_SUPERADMIN_EMAIL
-  const superPassRaw = env.INITIAL_SUPERADMIN_PASSWORD
+  const superEmail = env.INITIAL_SUPERADMIN_EMAIL || (env.NODE_ENV === 'production' ? '' : 'admin@labventory.local')
+  const superPassRaw = env.INITIAL_SUPERADMIN_PASSWORD || (env.NODE_ENV === 'production' ? '' : 'ChangeMe123!')
+
+  if (!superEmail || !superPassRaw) {
+    throw new Error('INITIAL_SUPERADMIN_EMAIL and INITIAL_SUPERADMIN_PASSWORD are required for production seed')
+  }
+
   const superPass = await bcrypt.hash(superPassRaw, 10)
 
-  // Ensure initial Super Admin exists
+  const defaultInstitution = await prisma.institution.upsert({
+    where: { slug: 'default' },
+    update: {},
+    create: {
+      name: 'Default Institution',
+      slug: 'default',
+      status: 'active'
+    }
+  })
+
   const superUser = await prisma.user.upsert({
     where: { email: superEmail },
     update: {},
@@ -20,7 +33,7 @@ async function run() {
       name: 'Initial Super Admin',
       email: superEmail,
       password: superPass,
-      role: 'superadmin'
+      role: 'platform_admin'
     }
   })
 
@@ -32,8 +45,8 @@ async function run() {
     console.log('Seeding initial labs...')
     await prisma.lab.createMany({
       data: [
-        { name: 'Electronics Lab', location: 'Main Building' },
-        { name: 'Computer Lab', location: 'East Wing' }
+        { name: 'Electronics Lab', location: 'Main Building', institutionId: defaultInstitution.id },
+        { name: 'Computer Lab', location: 'East Wing', institutionId: defaultInstitution.id }
       ]
     })
     console.log('✓ Initial labs created')
