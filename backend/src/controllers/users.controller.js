@@ -45,7 +45,16 @@ const list = async (req, res) => {
     const limit = Number(req.query.limit) || 10
     const skip = (page - 1) * limit
     const search = req.query.search ? String(req.query.search).trim() : ''
-    const where = scopedUserWhere(req.user, search
+    const extra = {}
+    if (isPlatformAdmin(req.user)) {
+        if (req.query.scope === 'platform') {
+            extra.role = { in: PLATFORM_USER_ROLES }
+        } else if (req.query.institutionId) {
+            extra.institutionId = Number(req.query.institutionId)
+            extra.role = { notIn: PLATFORM_USER_ROLES }
+        }
+    }
+    const searchFilter = search
         ? {
             OR: [
                 { name: { contains: search, mode: 'insensitive' } },
@@ -53,7 +62,7 @@ const list = async (req, res) => {
             ]
         }
         : {}
-    )
+    const where = scopedUserWhere(req.user, { ...extra, ...searchFilter })
 
     const [users, total] = await Promise.all([
         prisma.user.findMany({
@@ -155,7 +164,7 @@ const update = async (req, res) => {
         data,
         select: publicUserSelect
     })
-    await logAudit({ userId: req.user.id, institutionId: tenantIdOf(req.user), action: 'update', entity: 'user', entityId: id })
+    await logAudit({ userId: req.user.id, institutionId: data.institutionId !== undefined ? data.institutionId : tenantIdOf(req.user), action: 'update', entity: 'user', entityId: id, details: { role: data.role, status: data.status } })
     res.json(user)
 }
 
@@ -175,7 +184,7 @@ const remove = async (req, res) => {
     })
     if (activeBorrowings > 0) throw badRequest('Resolve active borrowings before deactivating this user')
     await prisma.user.update({ where: { id }, data: { status: 'inactive' } })
-    await logAudit({ userId: req.user.id, institutionId: tenantIdOf(req.user), action: 'deactivate', entity: 'user', entityId: id })
+    await logAudit({ userId: req.user.id, institutionId: existing.institutionId || tenantIdOf(req.user), action: 'deactivate', entity: 'user', entityId: id })
     res.status(204).send()
 }
 

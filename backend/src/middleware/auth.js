@@ -2,6 +2,7 @@ const jwt = require('jsonwebtoken')
 const { env } = require('../config/env')
 const { prisma } = require('../prisma/client')
 const { tenantIdOf, isPlatformAdmin, isInstitutionAdmin, isLabAdmin } = require('../utils/tenancy')
+const { hasPermission } = require('../config/access-control')
 
 const roleMatches = (actualRole, allowedRole) => {
   if (actualRole === allowedRole) return true
@@ -61,4 +62,37 @@ const authorize = (...roles) => (req, res, next) => {
   next()
 }
 
-module.exports = { authenticate, authorize }
+const forbidden = (message = 'Forbidden') => {
+  const e = new Error(message)
+  e.status = 403
+  return e
+}
+
+const requirePermission = (permission) => (req, res, next) => {
+  if (!req.user) {
+    const e = new Error('Unauthorized')
+    e.status = 401
+    return next(e)
+  }
+  if (!hasPermission(req.user, permission)) return next(forbidden())
+  next()
+}
+
+const requireAnyPermission = (permissions) => (req, res, next) => {
+  if (!req.user) {
+    const e = new Error('Unauthorized')
+    e.status = 401
+    return next(e)
+  }
+  if (!permissions.some(permission => hasPermission(req.user, permission))) return next(forbidden())
+  next()
+}
+
+const requireBodyPermission = (field, permission) => (req, res, next) => {
+  if (req.body && Object.prototype.hasOwnProperty.call(req.body, field) && !hasPermission(req.user, permission)) {
+    return next(forbidden())
+  }
+  next()
+}
+
+module.exports = { authenticate, authorize, requirePermission, requireAnyPermission, requireBodyPermission }

@@ -6,6 +6,7 @@ import { Inventory, Category } from '../../types'
 import { useAuth } from '../../hooks/useAuth'
 import TableSkeleton from '../../components/TableSkeleton'
 import { Button, ConfirmDialog, EmptyState, Field, Icon, PageHeader, Pagination, SelectField, StatusBadge, iconButtonLabel } from '../../components/ui'
+import { can } from '../../config/accessControl'
 
 type ConfirmState = { id: number; name: string } | null
 
@@ -26,6 +27,12 @@ export default function InventoryPage() {
   const [confirmDelete, setConfirmDelete] = useState<ConfirmState>(null)
   const [deleting, setDeleting] = useState(false)
   const { user } = useAuth()
+  const canCreateInventory = can(user, 'inventory.create')
+  const canUpdateInventory = can(user, 'inventory.update')
+  const canDeleteInventory = can(user, 'inventory.delete')
+  const canCreateCategory = can(user, 'category.create')
+  const canExportReports = can(user, 'report.export')
+  const canManageInventoryActions = canUpdateInventory || canDeleteInventory
 
   const load = async (pageNum: number = 1, searchQuery: string = q, categoryId: number | 'all' = cat) => {
     setLoading(true)
@@ -151,8 +158,8 @@ export default function InventoryPage() {
         description="Manage equipment, stock levels, QR codes, and storage locations across laboratories."
         actions={
           <>
-            {user?.role !== 'student' && <Button icon="plus" onClick={openModal}>Add Item</Button>}
-            <Button variant="secondary" icon="download" onClick={downloadPdf}>PDF Report</Button>
+            {canCreateInventory && <Button icon="plus" onClick={openModal}>Add Item</Button>}
+            {canExportReports && <Button variant="secondary" icon="download" onClick={downloadPdf}>PDF Report</Button>}
           </>
         }
       />
@@ -181,7 +188,7 @@ export default function InventoryPage() {
                   <th className="px-6 py-4">Category</th>
                   <th className="px-6 py-4">Stock</th>
                   <th className="px-6 py-4">QR</th>
-                  {user?.role !== 'student' && <th className="px-6 py-4 text-right">Actions</th>}
+                  {canManageInventoryActions && <th className="px-6 py-4 text-right">Actions</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -201,11 +208,11 @@ export default function InventoryPage() {
                     <td className="px-6 py-4">
                       {item.qrCodeUrl ? <img src={item.qrCodeUrl} alt={`${item.name} QR code`} className="h-10 w-10 rounded-lg border border-slate-200 bg-white p-1" /> : <span className="text-xs text-slate-400">No QR</span>}
                     </td>
-                    {user?.role !== 'student' && (
+                    {canManageInventoryActions && (
                       <td className="px-6 py-4">
                         <div className="flex justify-end gap-2">
-                          <Button variant="secondary" size="icon" onClick={() => edit(item)} {...iconButtonLabel(`Edit ${item.name}`)}><Icon name="edit" /></Button>
-                          <Button variant="secondary" size="icon" onClick={() => setConfirmDelete({ id: item.id, name: item.name })} {...iconButtonLabel(`Delete ${item.name}`)}><Icon name="trash" className="text-rose-600" /></Button>
+                          {canUpdateInventory && <Button variant="secondary" size="icon" onClick={() => edit(item)} {...iconButtonLabel(`Edit ${item.name}`)}><Icon name="edit" /></Button>}
+                          {canDeleteInventory && <Button variant="secondary" size="icon" onClick={() => setConfirmDelete({ id: item.id, name: item.name })} {...iconButtonLabel(`Delete ${item.name}`)}><Icon name="trash" className="text-rose-600" /></Button>}
                         </div>
                       </td>
                     )}
@@ -234,10 +241,10 @@ export default function InventoryPage() {
                 <StatusBadge tone="indigo">{categoryName(item.categoryId)}</StatusBadge>
                 {item.availableStock <= item.minStock && <StatusBadge tone="rose">Low stock</StatusBadge>}
               </div>
-              {user?.role !== 'student' && (
+              {canManageInventoryActions && (
                 <div className="mt-4 grid grid-cols-2 gap-2">
-                  <Button variant="secondary" icon="edit" onClick={() => edit(item)}>Edit</Button>
-                  <Button variant="secondary" icon="trash" onClick={() => setConfirmDelete({ id: item.id, name: item.name })}>Delete</Button>
+                  {canUpdateInventory && <Button variant="secondary" icon="edit" onClick={() => edit(item)}>Edit</Button>}
+                  {canDeleteInventory && <Button variant="secondary" icon="trash" onClick={() => setConfirmDelete({ id: item.id, name: item.name })}>Delete</Button>}
                 </div>
               )}
             </article>
@@ -270,9 +277,9 @@ export default function InventoryPage() {
               <option value={0} disabled>-- Select Category --</option>
               {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </SelectField>
-            {!addingCat ? (
+            {canCreateCategory && !addingCat ? (
               <Button type="button" variant="ghost" size="sm" icon="plus" className="mt-2" onClick={() => setAddingCat(true)}>Create category</Button>
-            ) : (
+            ) : canCreateCategory ? (
               <div className="mt-3 rounded-lg border border-indigo-100 bg-indigo-50/50 p-3">
                 <div className="flex flex-col gap-2 sm:flex-row">
                   <Field className="flex-1" placeholder="Category name..." value={newCatName} onChange={e => setNewCatName(e.target.value)} onKeyDown={e => e.key === 'Enter' && saveNewCategory()} autoFocus />
@@ -280,7 +287,7 @@ export default function InventoryPage() {
                   <Button type="button" variant="secondary" onClick={() => { setAddingCat(false); setNewCatName('') }}>Cancel</Button>
                 </div>
               </div>
-            )}
+            ) : null}
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">

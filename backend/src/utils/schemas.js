@@ -66,6 +66,7 @@ const invitations = {
             institutionId: z.number().optional(),
             labId: z.number().nullable().optional(),
             role: inviteRoleEnum.default('student'),
+            inviteeEmail: z.string().email().optional(),
             maxUses: z.number().int().min(1).max(500).optional(),
             expiresAt: z.string().refine(val => !isNaN(Date.parse(val)), { message: 'Invalid date format' }).optional()
         })

@@ -4,6 +4,8 @@ import toast from 'react-hot-toast'
 import type { Borrowing, BorrowStatus } from '../../types'
 import TableSkeleton from '../../components/TableSkeleton'
 import { Button, EmptyState, Field, PageHeader, Pagination, StatusBadge } from '../../components/ui'
+import { useAuth } from '../../hooks/useAuth'
+import { can } from '../../config/accessControl'
 
 const statusTone: Record<BorrowStatus, Parameters<typeof StatusBadge>[0]['tone']> = {
   pending: 'amber',
@@ -16,6 +18,7 @@ const statusTone: Record<BorrowStatus, Parameters<typeof StatusBadge>[0]['tone']
 }
 
 export default function ReportsPage() {
+  const { user } = useAuth()
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
   const [data, setData] = useState<Borrowing[]>([])
@@ -65,6 +68,8 @@ export default function ReportsPage() {
     return url
   }
 
+  const canExportReports = can(user, 'report.export')
+
   return (
     <div className="space-y-6">
       <PageHeader title="System Reports" description="Preview filtered borrowing data and export audit-ready PDF documents." />
@@ -74,8 +79,8 @@ export default function ReportsPage() {
           <Field label="From date" type="date" value={from} onChange={e => setFrom(e.target.value)} />
           <Field label="To date" type="date" value={to} onChange={e => setTo(e.target.value)} />
           <Button variant="secondary" icon="filter" onClick={() => loadData(1)}>Apply Preview</Button>
-          <Button icon="download" onClick={() => downloadReport(borrowingUrl(), 'borrowing_report.pdf')}>Export Borrowings</Button>
-          <Button variant="secondary" icon="download" onClick={() => downloadReport('/export/inventory', 'inventory_summary.pdf')}>Inventory Summary</Button>
+          {canExportReports && <Button icon="download" onClick={() => downloadReport(borrowingUrl(), 'borrowing_report.pdf')}>Export Borrowings</Button>}
+          {canExportReports && <Button variant="secondary" icon="download" onClick={() => downloadReport('/export/inventory', 'inventory_summary.pdf')}>Inventory Summary</Button>}
         </div>
       </section>
 

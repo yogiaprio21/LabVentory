@@ -5,7 +5,7 @@ import TableSkeleton from '../../components/TableSkeleton'
 import toast from 'react-hot-toast'
 import { Borrowing, BorrowStatus, Inventory } from '../../types'
 import { Button, ConfirmDialog, EmptyState, Field, Icon, PageHeader, Pagination, SelectField, StatusBadge, iconButtonLabel } from '../../components/ui'
-import { canManageInventory } from '../../utils/roles'
+import { can } from '../../config/accessControl'
 
 const QrScanner = lazy(() => import('../../components/QrScanner'))
 
@@ -107,21 +107,27 @@ export default function BorrowingsPage() {
     setAction({ id: b.id, label, endpoint, tone, description })
   }
 
-  const admin = canManageInventory(user)
+  const canCreateBorrowing = can(user, 'borrowing.create')
+  const canApproveBorrowing = can(user, 'borrowing.approve')
+  const canRejectBorrowing = can(user, 'borrowing.reject')
+  const canReturnBorrowing = can(user, 'borrowing.return')
+  const canMarkDamaged = can(user, 'borrowing.markDamaged')
+  const canMarkLost = can(user, 'borrowing.markLost')
+  const canManageBorrowings = canApproveBorrowing || canRejectBorrowing || canReturnBorrowing || canMarkDamaged || canMarkLost
 
   const ActionButtons = ({ b }: { b: Borrowing }) => (
     <div className="flex flex-wrap justify-end gap-2">
       {b.status === 'pending' && (
         <>
-          <Button size="sm" icon="check" onClick={() => openAction(b, 'Approve', `/borrowings/${b.id}/approve`, 'primary', 'This will approve the request and reduce available stock.')}>Approve</Button>
-          <Button size="sm" variant="secondary" icon="x" onClick={() => openAction(b, 'Reject', `/borrowings/${b.id}/reject`, 'danger', 'This will reject the borrowing request.')}>Reject</Button>
+          {canApproveBorrowing && <Button size="sm" icon="check" onClick={() => openAction(b, 'Approve', `/borrowings/${b.id}/approve`, 'primary', 'This will approve the request and reduce available stock.')}>Approve</Button>}
+          {canRejectBorrowing && <Button size="sm" variant="secondary" icon="x" onClick={() => openAction(b, 'Reject', `/borrowings/${b.id}/reject`, 'danger', 'This will reject the borrowing request.')}>Reject</Button>}
         </>
       )}
       {(b.status === 'approved' || b.status === 'late') && (
         <>
-          <Button size="sm" variant="secondary" icon="refresh" onClick={() => openAction(b, 'Return', `/borrowings/${b.id}/return`, 'primary', 'This will complete the transaction and restore available stock.')}>Return</Button>
-          <Button size="sm" variant="secondary" icon="alert" onClick={() => openAction(b, 'Mark damaged', `/borrowings/${b.id}/damaged`, 'danger', 'This marks the borrowed item as damaged and notifies the borrower.')}>Damaged</Button>
-          <Button size="sm" variant="secondary" icon="trash" onClick={() => openAction(b, 'Mark lost', `/borrowings/${b.id}/lost`, 'danger', 'This marks the borrowed item as lost and notifies the borrower.')}>Lost</Button>
+          {canReturnBorrowing && <Button size="sm" variant="secondary" icon="refresh" onClick={() => openAction(b, 'Return', `/borrowings/${b.id}/return`, 'primary', 'This will complete the transaction and restore available stock.')}>Return</Button>}
+          {canMarkDamaged && <Button size="sm" variant="secondary" icon="alert" onClick={() => openAction(b, 'Mark damaged', `/borrowings/${b.id}/damaged`, 'danger', 'This marks the borrowed item as damaged and notifies the borrower.')}>Damaged</Button>}
+          {canMarkLost && <Button size="sm" variant="secondary" icon="trash" onClick={() => openAction(b, 'Mark lost', `/borrowings/${b.id}/lost`, 'danger', 'This marks the borrowed item as lost and notifies the borrower.')}>Lost</Button>}
         </>
       )}
     </div>
@@ -131,7 +137,7 @@ export default function BorrowingsPage() {
     <div className="space-y-6">
       <PageHeader title="Borrowings" description="Track requests, approvals, returns, and item condition updates." />
 
-      <section className="card p-4">
+      {canCreateBorrowing && <section className="card p-4">
         <div className="mb-4 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500">
           <Icon name="plus" />
           New Borrowing Request
@@ -146,7 +152,7 @@ export default function BorrowingsPage() {
           <Button icon="plus" onClick={request}>Request</Button>
           <Button variant="dark" icon="qr" onClick={() => setShowScanner(true)}>Scan QR</Button>
         </div>
-      </section>
+      </section>}
 
       {showScanner && (
         <Suspense fallback={<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 text-white">Loading scanner...</div>}>
@@ -170,7 +176,7 @@ export default function BorrowingsPage() {
                   <th className="px-6 py-4">Borrow</th>
                   <th className="px-6 py-4">Due</th>
                   <th className="px-6 py-4">Status</th>
-                  {admin && <th className="px-6 py-4 text-right">Actions</th>}
+                  {canManageBorrowings && <th className="px-6 py-4 text-right">Actions</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -185,7 +191,7 @@ export default function BorrowingsPage() {
                     <td className="px-6 py-4 text-slate-600">{b.borrowDate ? b.borrowDate.slice(0, 10) : '-'}</td>
                     <td className="px-6 py-4 font-medium text-slate-600">{b.dueDate?.slice(0, 10)}</td>
                     <td className="px-6 py-4"><StatusBadge tone={statusTone[b.status]}>{b.status}</StatusBadge></td>
-                    {admin && <td className="px-6 py-4 text-right"><ActionButtons b={b} /></td>}
+                    {canManageBorrowings && <td className="px-6 py-4 text-right"><ActionButtons b={b} /></td>}
                   </tr>
                 ))}
               </tbody>
@@ -211,7 +217,7 @@ export default function BorrowingsPage() {
                 <span>Borrow: {b.borrowDate ? b.borrowDate.slice(0, 10) : '-'}</span>
                 <span>Due: {b.dueDate?.slice(0, 10)}</span>
               </div>
-              {admin && <div className="mt-4"><ActionButtons b={b} /></div>}
+              {canManageBorrowings && <div className="mt-4"><ActionButtons b={b} /></div>}
             </article>
           ))}
         </div>

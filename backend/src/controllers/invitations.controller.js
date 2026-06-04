@@ -15,6 +15,7 @@ const {
 const selectInvite = {
   id: true,
   code: true,
+  inviteeEmail: true,
   role: true,
   status: true,
   maxUses: true,
@@ -26,7 +27,11 @@ const selectInvite = {
   createdBy: { select: { id: true, name: true, email: true } }
 }
 
-const scopeWhere = (req) => isPlatformAdmin(req.user) ? {} : { institutionId: tenantIdOf(req.user) || -1 }
+const scopeWhere = (req) => {
+  if (!isPlatformAdmin(req.user)) return { institutionId: tenantIdOf(req.user) || -1 }
+  const institutionId = req.query.institutionId ? Number(req.query.institutionId) : null
+  return institutionId ? { institutionId } : {}
+}
 
 const list = async (req, res) => {
   const invitations = await prisma.invitation.findMany({
@@ -39,21 +44,28 @@ const list = async (req, res) => {
 }
 
 const create = async (req, res) => {
-  const { institutionId, labId, role = 'student', maxUses = 1, expiresAt } = req.body
-  const targetInstitutionId = isPlatformAdmin(req.user) ? institutionId : tenantIdOf(req.user)
+  const { institutionId, labId, role = 'student', maxUses = 1, expiresAt, inviteeEmail } = req.body
+  let lab = null
+  if (labId) {
+    lab = await assertLabAccess(req.user, labId)
+    if (lab.status !== 'active') throw badRequest('Cannot create invitation for an inactive laboratory')
+  }
+
+  const targetInstitutionId = lab?.institutionId || (isPlatformAdmin(req.user) ? institutionId : tenantIdOf(req.user))
+  if (!targetInstitutionId) {
+    throw badRequest(roleRequiresLab(role)
+      ? 'Select a laboratory or institution before creating this invitation'
+      : 'institutionId is required for institution-scoped invitations')
+  }
+
   const institution = await assertInstitutionAccess(req.user, targetInstitutionId)
   if (institution.status !== 'active') throw badRequest('Institution is inactive')
 
-  let lab = null
   if (roleRequiresLab(role)) {
-    if (!labId) throw badRequest('labId is required for this invite role')
-    lab = await assertLabAccess(req.user, labId)
+    if (!lab) throw badRequest('labId is required for this invite role')
     if (lab.institutionId !== institution.id) throw badRequest('labId does not belong to selected institution')
-    if (lab.status !== 'active') throw badRequest('Cannot create invitation for an inactive laboratory')
-  } else if (labId) {
-    lab = await assertLabAccess(req.user, labId)
+  } else if (lab) {
     if (lab.institutionId !== institution.id) throw badRequest('labId does not belong to selected institution')
-    if (lab.status !== 'active') throw badRequest('Cannot create invitation for an inactive laboratory')
   }
   const expiry = expiresAt ? new Date(expiresAt) : dayjs().add(7, 'day').toDate()
   if (expiry <= new Date()) throw badRequest('expiresAt must be in the future')
@@ -61,6 +73,7 @@ const create = async (req, res) => {
   const invite = await prisma.invitation.create({
     data: {
       code: createInviteCode(),
+      inviteeEmail: inviteeEmail ? inviteeEmail.toLowerCase() : null,
       institutionId: institution.id,
       labId: lab?.id || null,
       role,
@@ -77,7 +90,7 @@ const create = async (req, res) => {
     action: 'create',
     entity: 'invitation',
     entityId: invite.id,
-    details: { role, labId: lab?.id || null, maxUses: invite.maxUses, expiresAt: invite.expiresAt }
+    details: { role, labId: lab?.id || null, inviteeEmail: invite.inviteeEmail, maxUses: invite.maxUses, expiresAt: invite.expiresAt }
   })
   res.status(201).json(invite)
 }
@@ -148,6 +161,7 @@ const resolve = async (req, res) => {
   res.json({
     invitation: {
       code: invite.code,
+      inviteeEmail: invite.inviteeEmail,
       role: invite.role,
       expiresAt: invite.expiresAt,
       remainingUses: invite.maxUses - invite.usedCount

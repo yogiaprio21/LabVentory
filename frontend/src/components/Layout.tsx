@@ -5,24 +5,27 @@ import { useAuth } from '../hooks/useAuth'
 import NotificationBell from './NotificationBell'
 import { ConfirmDialog, Icon, iconButtonLabel } from './ui'
 import { roleLabel } from '../utils/roles'
+import { can, type Permission } from '../config/accessControl'
 
 type NavItem = {
   to: string
   label: string
   description: string
   icon: Parameters<typeof Icon>[0]['name']
-  roles: string[]
+  permission: Permission
 }
 
 const nav: NavItem[] = [
-  { to: '/superadmin/analytics', label: 'Analytics', description: 'Global platform metrics', icon: 'barChart', roles: ['superadmin', 'platform_admin'] },
-  { to: '/dashboard', label: 'Dashboard', description: 'Activity overview', icon: 'home', roles: ['admin', 'lab_admin', 'institution_admin', 'student'] },
-  { to: '/inventory', label: 'Inventory', description: 'Equipment and stock', icon: 'package', roles: ['admin', 'lab_admin', 'institution_admin', 'superadmin', 'platform_admin'] },
-  { to: '/borrowings', label: 'Borrowings', description: 'Requests and returns', icon: 'bookOpen', roles: ['student', 'admin', 'lab_admin', 'institution_admin', 'superadmin', 'platform_admin'] },
-  { to: '/audit', label: 'Audit Logs', description: 'Security activity', icon: 'shield', roles: ['admin', 'lab_admin', 'institution_admin', 'superadmin', 'platform_admin'] },
-  { to: '/reports', label: 'Reports', description: 'PDF exports', icon: 'download', roles: ['admin', 'lab_admin', 'institution_admin', 'superadmin', 'platform_admin'] },
-  { to: '/superadmin/labs', label: 'Labs', description: 'Facilities', icon: 'building', roles: ['institution_admin', 'superadmin', 'platform_admin'] },
-  { to: '/superadmin/users', label: 'Users', description: 'Accounts and roles', icon: 'users', roles: ['institution_admin', 'superadmin', 'platform_admin'] }
+  { to: '/superadmin/analytics', label: 'Analytics', description: 'Global platform metrics', icon: 'barChart', permission: 'platform.analytics.view' },
+  { to: '/dashboard', label: 'Dashboard', description: 'Activity overview', icon: 'home', permission: 'dashboard.view' },
+  { to: '/inventory', label: 'Inventory', description: 'Equipment and stock', icon: 'package', permission: 'inventory.view' },
+  { to: '/borrowings', label: 'Borrowings', description: 'Requests and returns', icon: 'bookOpen', permission: 'borrowing.view' },
+  { to: '/audit', label: 'Audit Logs', description: 'Security activity', icon: 'shield', permission: 'audit.view' },
+  { to: '/reports', label: 'Reports', description: 'PDF exports', icon: 'download', permission: 'report.view' },
+  { to: '/superadmin/institutions', label: 'Institutions', description: 'Tenant workspaces', icon: 'building', permission: 'institution.view' },
+  { to: '/superadmin/labs', label: 'Labs', description: 'Facilities', icon: 'building', permission: 'lab.view' },
+  { to: '/superadmin/users', label: 'Users', description: 'Accounts and roles', icon: 'users', permission: 'user.view' },
+  { to: '/superadmin/access-control', label: 'Access Control', description: 'Role permissions', icon: 'shield', permission: 'accessControl.view' }
 ]
 
 function Brand() {
@@ -74,7 +77,7 @@ export default function Layout() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [confirmLogout, setConfirmLogout] = useState(false)
 
-  const filteredNav = useMemo(() => nav.filter(n => n.roles.includes(user!.role)), [user])
+  const filteredNav = useMemo(() => nav.filter(n => can(user, n.permission)), [user])
   const activePage = filteredNav.find(n => location.pathname === n.to) || filteredNav.find(n => location.pathname.startsWith(n.to))
 
   const handleLogout = () => {

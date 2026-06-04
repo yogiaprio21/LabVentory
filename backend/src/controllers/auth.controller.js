@@ -5,7 +5,7 @@ const { Prisma } = require('@prisma/client')
 const { env } = require('../config/env')
 const { logAudit } = require('../utils/audit')
 const { isInviteUsable } = require('../utils/invite')
-const { assertActiveLabAccess, isPlatformAdmin, tenantIdOf, badRequest, forbidden } = require('../utils/tenancy')
+const { assertActiveLabAccess, assertInstitutionAccess, isPlatformAdmin, tenantIdOf, badRequest, forbidden } = require('../utils/tenancy')
 
 const signToken = (user) => {
   const payload = { sub: user.id, role: user.role, institutionId: tenantIdOf(user), labId: user.labId }
@@ -52,6 +52,11 @@ const registerStudent = async (req, res) => {
       })
       if (!isInviteUsable(invitation)) {
         const e = new Error('Invitation is invalid or expired')
+        e.status = 400
+        throw e
+      }
+      if (invitation.inviteeEmail && invitation.inviteeEmail.toLowerCase() !== email.toLowerCase()) {
+        const e = new Error('Invitation email does not match this account')
         e.status = 400
         throw e
       }
@@ -116,7 +121,7 @@ const registerStudent = async (req, res) => {
           action: 'consume',
           entity: 'invitation',
           entityId: invitation.id,
-          details: { role, labId: selectedLab?.id || null }
+          details: { role, labId: selectedLab?.id || null, inviteeEmail: invitation.inviteeEmail || null }
         }
       })
     }
@@ -153,6 +158,10 @@ const register = async (req, res) => {
 
   if (role !== 'platform_admin' && role !== 'superadmin' && !targetInstitutionId) {
     throw badRequest('institutionId is required')
+  }
+  if (role === 'institution_admin') {
+    const institution = await assertInstitutionAccess(req.user, targetInstitutionId)
+    if (institution.status !== 'active') throw badRequest('Cannot create user for an inactive institution')
   }
 
   // Check email uniqueness

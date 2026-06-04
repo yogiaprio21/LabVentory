@@ -1,7 +1,7 @@
 const { Router } = require('express')
 const { z } = require('zod')
 const { validate } = require('../middleware/validate')
-const { authenticate, authorize } = require('../middleware/auth')
+const { authenticate, requirePermission } = require('../middleware/auth')
 const ctrl = require('../controllers/categories.controller')
 
 const router = Router()
@@ -28,9 +28,9 @@ const idParam = z.object({
   query: z.object({}).optional()
 })
 
-router.post('/', authorize('admin', 'superadmin'), validate(createSchema), (req, res, next) => ctrl.createCategory(req, res).catch(next))
-router.put('/:id', authorize('admin', 'superadmin'), validate(updateSchema), (req, res, next) => ctrl.updateCategory(req, res).catch(next))
-router.delete('/:id', authorize('admin', 'superadmin'), validate(idParam), (req, res, next) => ctrl.deleteCategory(req, res).catch(next))
-router.get('/', (req, res, next) => ctrl.listCategories(req, res).catch(next))
+router.post('/', requirePermission('category.create'), validate(createSchema), (req, res, next) => ctrl.createCategory(req, res).catch(next))
+router.put('/:id', requirePermission('category.update'), validate(updateSchema), (req, res, next) => ctrl.updateCategory(req, res).catch(next))
+router.delete('/:id', requirePermission('category.delete'), validate(idParam), (req, res, next) => ctrl.deleteCategory(req, res).catch(next))
+router.get('/', requirePermission('category.view'), (req, res, next) => ctrl.listCategories(req, res).catch(next))
 
 module.exports = router

@@ -6,7 +6,9 @@
     "securitySchemes": { "bearerAuth": { "type": "http", "scheme": "bearer", "bearerFormat": "JWT" } },
     "schemas": {
       "LoginRequest": { "type": "object", "properties": { "email": { "type": "string", "format": "email" }, "password": { "type": "string" } }, "required": ["email","password"] },
-      "RegisterRequest": { "type": "object", "properties": { "name": { "type": "string" }, "email": { "type": "string","format":"email" }, "password": { "type": "string" }, "role": { "type": "string","enum":["superadmin","admin","student"] }, "labId": { "type": "integer","nullable": true } }, "required": ["name","email","password","role"] },
+      "Role": { "type": "string", "enum": ["platform_admin", "institution_admin", "lab_admin", "superadmin", "admin", "student"] },
+      "Permission": { "type": "string", "example": "inventory.update" },
+      "RegisterRequest": { "type": "object", "properties": { "name": { "type": "string" }, "email": { "type": "string","format":"email" }, "password": { "type": "string" }, "role": { "$ref": "#/components/schemas/Role" }, "institutionId": { "type": "integer","nullable": true }, "labId": { "type": "integer","nullable": true }, "inviteCode": { "type": "string" } }, "required": ["name","email","password","role"] },
       "Lab": { "type": "object", "properties": { "id": { "type": "integer" }, "name": { "type": "string" }, "location": { "type": "string" } } },
       "Category": { "type": "object", "properties": { "id": { "type": "integer" }, "name": { "type": "string" }, "labId": { "type": "integer" } } },
       "Inventory": { "type": "object", "properties": { "id": { "type": "integer" }, "name": { "type": "string" }, "categoryId": { "type": "integer" }, "labId": { "type": "integer" }, "totalStock": { "type": "integer" }, "availableStock": { "type": "integer" }, "location": { "type": "string" }, "condition": { "type": "string" }, "qrCodeUrl": { "type": "string" } } },
@@ -14,10 +16,12 @@
     }
   },
   "security": [{ "bearerAuth": [] }],
-  "tags": [{ "name": "Auth" }, { "name": "Labs" }, { "name": "Categories" }, { "name": "Inventory" }, { "name": "Borrowings" }, { "name": "Dashboard" }, { "name": "Export" }],
+  "tags": [{ "name": "Auth" }, { "name": "Access Control" }, { "name": "Institutions" }, { "name": "Labs" }, { "name": "Categories" }, { "name": "Inventory" }, { "name": "Borrowings" }, { "name": "Dashboard" }, { "name": "Export" }],
   "paths": {
     "/auth/register": { "post": { "tags": ["Auth"], "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RegisterRequest" } } } }, "responses": { "201": { "description": "Created" } } } },
     "/auth/login": { "post": { "tags": ["Auth"], "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LoginRequest" }, "examples": { "default": { "value": { "email": "superadmin@example.com", "password": "superadmin123" } } } } } }, "responses": { "200": { "description": "OK" }, "401": { "description": "Unauthorized" } } } },
+    "/acl/me": { "get": { "tags": ["Access Control"], "responses": { "200": { "description": "Current user role and permissions" }, "403": { "description": "Forbidden" } } } },
+    "/acl/matrix": { "get": { "tags": ["Access Control"], "responses": { "200": { "description": "Role permission matrix" }, "403": { "description": "Forbidden" } } } },
     "/labs": { "get": { "tags": ["Labs"], "responses": { "200": { "description": "OK" } } }, "post": { "tags": ["Labs"], "responses": { "201": { "description": "Created" } } } },
     "/labs/{id}": { "put": { "tags": ["Labs"], "parameters": [{ "in": "path", "name": "id", "required": true, "schema": { "type": "integer" } }], "responses": { "200": { "description": "OK" } } }, "delete": { "tags": ["Labs"], "parameters": [{ "in": "path", "name": "id", "required": true, "schema": { "type": "integer" } }], "responses": { "204": { "description": "No Content" } } } },
     "/categories": { "get": { "tags": ["Categories"], "responses": { "200": { "description": "OK" } } }, "post": { "tags": ["Categories"], "responses": { "201": { "description": "Created" } } } },

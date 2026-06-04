@@ -21,9 +21,10 @@ export default function NotificationBell() {
     const load = async () => {
         try {
             const res = await api.get('/notifications')
-            setNotifications(res.data)
+            setNotifications(Array.isArray(res.data) ? res.data : [])
         } catch (e) {
             // Silent fail for notifications
+            setNotifications([])
         }
     }
 

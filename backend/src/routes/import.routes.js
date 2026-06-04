@@ -1,6 +1,6 @@
 const { Router } = require('express')
 const multer = require('multer')
-const { authenticate, authorize } = require('../middleware/auth')
+const { authenticate, requirePermission } = require('../middleware/auth')
 const ctrl = require('../controllers/import.controller')
 
 const router = Router()
@@ -15,6 +15,6 @@ const upload = multer({
     }
 })
 
-router.post('/inventory', authenticate, authorize('admin', 'superadmin'), upload.single('file'), (req, res, next) => ctrl.importInventory(req, res).catch(next))
+router.post('/inventory', authenticate, requirePermission('inventory.import'), upload.single('file'), (req, res, next) => ctrl.importInventory(req, res).catch(next))
 
 module.exports = router

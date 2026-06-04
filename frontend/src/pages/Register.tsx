@@ -11,7 +11,7 @@ export default function Register() {
   const [searchParams] = useSearchParams()
   const [labs, setLabs] = useState<Lab[]>([])
   const [institution, setInstitution] = useState<Institution | null>(null)
-  const [invite, setInvite] = useState<{ code: string; role: string; expiresAt: string; remainingUses: number } | null>(null)
+  const [invite, setInvite] = useState<{ code: string; inviteeEmail?: string | null; role: string; expiresAt: string; remainingUses: number } | null>(null)
   const [labsLoading, setLabsLoading] = useState(true)
   const [labsError, setLabsError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -54,6 +54,9 @@ export default function Register() {
           setForm(f => ({ ...f, labId: String(r.data.lab?.id || loadedLabs[0].id) }))
         } else if (!requiresLab) {
           setForm(f => ({ ...f, labId: '' }))
+        }
+        if (nextInvite?.inviteeEmail) {
+          setForm(f => ({ ...f, email: nextInvite.inviteeEmail }))
         }
         if (!inviteCode && r.data.institution?.registrationMode === 'invite') {
           setLabsError('This institution requires an invitation link to register.')
@@ -122,7 +125,7 @@ export default function Register() {
                 <p className="text-sm font-extrabold text-slate-950">{invite ? 'Invitation verified' : 'Institution registration'}</p>
                 <p className="mt-1 text-xs font-semibold leading-5 text-slate-600">
                   {invite
-                    ? `Role: ${invite.role.replace(/_/g, ' ')}. Remaining uses: ${invite.remainingUses}.`
+                    ? `Role: ${invite.role.replace(/_/g, ' ')}. ${invite.inviteeEmail ? `Email: ${invite.inviteeEmail}. ` : ''}Remaining uses: ${invite.remainingUses}.`
                     : 'If your institution uses invite-only access, ask the admin for a registration link.'}
                 </p>
               </div>
